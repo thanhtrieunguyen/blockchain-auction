@@ -1,3 +1,4 @@
+```
 blockchain-auction/
 ├── contracts/                  # Thư mục chứa các hợp đồng thông minh (smart contracts).
 │   ├── Migrations.sol          # Hợp đồng quản lý các di chuyển (migrations) trên mạng lưới blockchain.
@@ -33,3 +34,4 @@ blockchain-auction/
 ├── package.json                # Tệp cấu hình cho NPM, chứa thông tin về các phụ thuộc của dự án.
 ├── bs-config.js                # Tệp cấu hình cho Browsersync.
 └── truffle-config.js           # Tệp cấu hình cho Truffle, một khung làm việc cho Ethereum.
+```
