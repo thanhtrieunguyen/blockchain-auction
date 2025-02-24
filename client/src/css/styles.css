@@ -1,0 +1,71 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    padding-top: 88px;
+    background: #ffffff;
+    color: #04111d;
+    font-family: 'Poppins', sans-serif;
+}
+
+.connect-wallet-page {
+    padding-top: 0 !important;
+}
+
+/* Import font Poppins từ Google Fonts */
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap');
+
+.auction-card {
+    transition: transform 0.2s ease-in-out;
+}
+
+.auction-card:hover {
+    transform: translateY(-4px);
+}
+
+.auction-image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.badge {
+    background: rgba(1, 80, 255, 0.9);
+    backdrop-filter: blur(4px);
+}
+
+/* Add smooth transitions */
+.fade-enter {
+    opacity: 0;
+}
+
+.fade-enter-active {
+    opacity: 1;
+    transition: opacity 300ms ease-in;
+}
+
+.fade-exit {
+    opacity: 1;
+}
+
+.fade-exit-active {
+    opacity: 0;
+    transition: opacity 300ms ease-out;
+}
+
+::-webkit-scrollbar {
+    width: 6px;
+}
+
+::-webkit-scrollbar-track {
+    background: #F1F5F9;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #2081E2;
+    border-radius: 3px;
+}
