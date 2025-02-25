@@ -73,7 +73,7 @@ const AuctionCard = ({ auction }) => {
     } = auction;
 
     return (
-        <StyledCard component={Link} to={`/auction/${id}`} style={{ textDecoration: 'none' }}>
+        <StyledCard component={Link} to={`/auctions/${id}`} style={{ textDecoration: 'none' }}>
             <ImageWrapper>
                 <img src={imageUrl} alt={title} />
                 <InfoBadge>

@@ -1,15 +1,16 @@
 import React, { useState, useEffect, useContext } from 'react';
 import Web3 from 'web3';
 import { Button, Typography, Container, Box } from '@mui/material';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { AccountContext } from '../context/AccountContext';
 import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
 
 const ConnectWallet = () => {
   const [web3, setWeb3] = useState(null);
   const [error, setError] = useState('');
+  const { setAccount, account } = useContext(AccountContext);
   const navigate = useNavigate();
-  const { setAccount } = useContext(AccountContext);
+  const location = useLocation();
 
   useEffect(() => {
     document.body.classList.add('connect-wallet-page');
@@ -20,13 +21,20 @@ const ConnectWallet = () => {
   }, []);
 
   useEffect(() => {
+
     if (window.ethereum) {
       const web3Instance = new Web3(window.ethereum);
       setWeb3(web3Instance);
     } else {
       setError('MetaMask is not installed. Please install it to use this app.');
     }
-  }, []);
+
+    if (account) {
+      // Redirect to home page or previous page
+      const returnPath = location.state?.returnPath || '/';
+      navigate(returnPath, { replace: true });
+    }
+  }, [account, navigate, location.state]);
 
   const connectWallet = async () => {
     if (web3) {
