@@ -1,0 +1,75 @@
+.mint-nft-container {
+  display: flex;
+  align-items: center;
+  min-height: fit-content !important;
+  margin-left: 50px;
+  background: #ffffff;
+}
+
+.disabled-card {
+  pointer-events: none;
+  opacity: 0.6;
+}
+
+/* Phần bên trái */
+.mint-nft-left {
+  width: 50%;
+  text-align: left;
+  margin-right: 50px;
+}
+
+.mint-nft-title {
+  color: #04111d;
+  font-weight: 600;
+  font-size: 2.5rem;
+}
+
+.mint-nft-card {
+  display: flex;
+  align-items: center;
+  padding: 15px;
+  margin: 20px 0;
+  box-shadow: 0px 4px 10px rgba(203, 199, 199, 0.1);
+  border-radius: 30px !important;
+  transition: 0.3s;
+}
+
+.mint-nft-card:hover {
+  transform: scale(1.02);
+}
+
+/* Phần bên phải (Swiper) */
+.mint-nft-right {
+  width: 50%;
+  height: auto;
+}
+
+.nft-slide {
+  display: flex;
+  height: 88vh;
+}
+
+.nft-background {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: -1;
+}
+
+.nft-info {
+  position: absolute;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  text-align: center;
+  background: rgba(0, 0, 0, 0.7);
+  padding: 8px 15px;
+  border-radius: 10px;
+  color: white;
+  font-size: 1rem;
+  font-weight: bold;
+  white-space: nowrap;
+}

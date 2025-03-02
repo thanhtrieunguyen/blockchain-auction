@@ -16,6 +16,8 @@ import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
 import Web3Button from '../components/Web3Button';
 import { AccountContext } from '../context/AccountContext';
+import { initWeb3, getContracts } from '../web3';
+import { useSnackbar } from 'notistack';
 
 const StyledPaper = styled(Paper)(({ theme }) => ({
     padding: theme.spacing(3),
@@ -35,6 +37,7 @@ const NFTPreview = styled(Box)(({ theme }) => ({
     overflow: 'hidden',
 }));
 
+
 const CreateAuction = () => {
     const navigate = useNavigate();
     const { account } = useContext(AccountContext);
@@ -47,29 +50,51 @@ const CreateAuction = () => {
     const [loading, setLoading] = useState(false);
     const [nftData, setNftData] = useState(null);
     const [error, setError] = useState('');
+    const { enqueueSnackbar } = useSnackbar();
 
     // Hàm này sẽ gọi API để lấy thông tin NFT
-    const fetchNFTData = async () => {
-        if (!formData.tokenAddress || !formData.tokenId) return;
-
+        const fetchNFTData = async () => {
+        if (!formData.tokenAddress || !formData.tokenId || !account) return;
+    
         setLoading(true);
         setError('');
         try {
-            // Đây là nơi bạn sẽ gọi API để lấy metadata của NFT
-            // Ví dụ:
-            // const response = await fetch(`/api/nft/${formData.tokenAddress}/${formData.tokenId}`);
-            // const data = await response.json();
-
-            // Tạm thời dùng dữ liệu mẫu
-            const mockData = {
-                imageUrl: "https://i.seadn.io/s/raw/files/5d86dafbc10d03c6589d5d920ada4379.jpg",
-                name: "Sample NFT #" + formData.tokenId,
-                collection: "Sample Collection"
-            };
-
-            setNftData(mockData);
+            const web3 = await initWeb3();
+            const { nftMinting } = await getContracts(web3);
+            
+            // Kiểm tra tính hợp lệ của tokenId
+            try {
+                const tokenURI = await nftMinting.methods.tokenURI(formData.tokenId).call();
+                let metadata = {};
+                
+                // Thử lấy metadata từ tokenURI
+                if (tokenURI.startsWith('http')) {
+                    const response = await fetch(tokenURI);
+                    metadata = await response.json();
+                }
+                
+                // Kiểm tra quyền sở hữu
+                const owner = await nftMinting.methods.ownerOf(formData.tokenId).call();
+                const isOwner = owner.toLowerCase() === account.toLowerCase();
+                
+                if (!isOwner) {
+                    setError('You do not own this NFT');
+                    setNftData(null);
+                } else {
+                    setNftData({
+                        imageUrl: metadata.image || "https://via.placeholder.com/400?text=NFT+Preview",
+                        name: metadata.name || `NFT #${formData.tokenId}`,
+                        collection: metadata.collection || "Your NFT Collection",
+                        description: metadata.description || ""
+                    });
+                }
+            } catch (err) {
+                console.error("Error fetching NFT data:", err);
+                setError('Could not fetch NFT data. Please verify the token address and ID.');
+                setNftData(null);
+            }
         } catch (err) {
-            setError('Could not fetch NFT data. Please verify the token address and ID.');
+            setError('Could not connect to blockchain. Please try again.');
             setNftData(null);
         } finally {
             setLoading(false);
@@ -78,9 +103,102 @@ const CreateAuction = () => {
 
     const handleSubmit = async (event) => {
         event.preventDefault();
-        // Xử lý tạo auction ở đây
-        console.log('Form submitted:', formData);
-        navigate('/my-auctions');
+        setError('');
+        setLoading(true);
+
+        try {
+            const web3 = await initWeb3();
+            const { nftAuction, nftMinting } = await getContracts(web3);
+
+            // Validate inputs
+            if (!formData.tokenAddress || !formData.tokenId || !formData.startingPrice || !formData.endDate) {
+                throw new Error('Please fill in all required fields');
+            }
+
+            if (parseFloat(formData.startingPrice) <= 0) {
+                throw new Error('Starting price must be greater than 0');
+            }
+
+            const now = new Date();
+            if (formData.endDate <= now) {
+                throw new Error('End date must be in the future');
+            }
+
+            // Convert values for contract interaction
+            const startingPriceWei = web3.utils.toWei(formData.startingPrice, 'ether');
+            const durationInMinutes = Math.floor((formData.endDate - now) / (60 * 1000));
+
+            // Check NFT ownership
+            const owner = await nftMinting.methods.ownerOf(formData.tokenId).call();
+            if (owner.toLowerCase() !== account.toLowerCase()) {
+                throw new Error('You do not own this NFT');
+            }
+
+            // Approve NFT transfer
+            try {
+                const approved = await nftMinting.methods.getApproved(formData.tokenId).call();
+                if (approved.toLowerCase() !== nftAuction._address.toLowerCase()) {
+                    setLoading(true);
+                    // Hiển thị thông báo phê duyệt
+                    enqueueSnackbar('Please confirm the approval transaction in your wallet', {
+                        variant: 'info',
+                        autoHideDuration: 5000,
+                    });
+
+                    await nftMinting.methods
+                        .approve(nftAuction._address, formData.tokenId)
+                        .send({
+                            from: account
+                        });
+
+                    // Hiển thị thông báo phê duyệt thành công
+                    enqueueSnackbar('NFT approved successfully! Please confirm the auction creation', {
+                        variant: 'success',
+                        autoHideDuration: 3000,
+                    });
+                }
+            } catch (error) {
+                throw new Error('Failed to approve NFT transfer: ' + error.message);
+            }
+
+            // Create auction
+            try {
+                // Hiển thị thông báo tạo đấu giá
+                enqueueSnackbar('Please confirm the auction creation transaction in your wallet', {
+                    variant: 'info',
+                    autoHideDuration: 5000,
+                });
+
+                await nftAuction.methods
+                    .createAuction(
+                        nftMinting._address,
+                        formData.tokenId,
+                        startingPriceWei,
+                        durationInMinutes
+                    )
+                    .send({
+                        from: account
+                    });
+
+                // Thành công - chuyển hướng đến my auctions
+                enqueueSnackbar('Auction created successfully!', {
+                    variant: 'success',
+                    autoHideDuration: 3000,
+                });
+                navigate('/my-auctions');
+            } catch (error) {
+                throw new Error('Failed to create auction: ' + error.message);
+            }
+        } catch (error) {
+            console.error("Error creating auction:", error);
+            setError(error.message || 'Failed to create auction. Please try again.');
+            enqueueSnackbar(error.message || 'Failed to create auction', {
+                variant: 'error',
+                autoHideDuration: 5000,
+            });
+        } finally {
+            setLoading(false);
+        }
     };
 
     useEffect(() => {
@@ -209,7 +327,7 @@ const CreateAuction = () => {
                                         fullWidth
                                         disabled={!nftData || loading}
                                     >
-                                        Create Auction
+                                        {loading ? 'Creating Auction...' : 'Create Auction'}
                                     </Web3Button>
                                 </Box>
                             </StyledPaper>

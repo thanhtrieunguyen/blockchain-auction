@@ -13,27 +13,49 @@ import UnauthenticatedRoute from './components/UnauthenticatedRoute';
 import { AccountProvider } from './context/AccountContext';
 import { Snackbar, Alert } from '@mui/material';
 import { useState, useEffect } from 'react';
+import { SnackbarProvider } from 'notistack';
+import SnackbarContent from './components/SnackbarContentWrapper';
+import "./css/Toast.css";
+import Create from './pages/Create';
+// import Drop from './components/Drop';
+import CreateNFT from './pages/CreateNFT';
+import NewCollection from './components/NewCollection';
+import NFTDetail from './pages/NFTDetail';
+import MintNFTDetail from './pages/MintNFTDetail';
 
 function LayoutWithHeader() {
   const location = useLocation();
   const hideHeaderRoutes = ["/connect-wallet"];
   const shouldShowHeader = !hideHeaderRoutes.includes(location.pathname);
 
+  const containerStyle =
+    location.pathname === "/create"
+      ? { flex: 1, height: "100vh" }
+      : { flex: 1, minHeight: "calc(180vh - 64px - 400px)" };
+
   return (
-    <div className="App" style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
-      {shouldShowHeader && <Header />}
-      <div style={{ flex: 1, minHeight: 'calc(180vh - 64px - 400px)' }}> {/* 64px là Header height, 400px là Footer height */}
-        <Routes>
-          <Route path="/" element={<Home />} />
-          <Route path="/auctions" element={<Auctions />} />
-          <Route path="/auctions/:id" element={<AuctionDetail />} />
-          <Route path="/mint" element={<Mint />} />
-          <Route path="/my-auctions" element={<MyAuctions />} />
-          <Route path="/create-auction" element={<CreateAuction />} />
-        </Routes>
+    <>
+      <div className="App" style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+        {shouldShowHeader && <Header />}
+        <div style={containerStyle}> {/* 64px là Header height, 400px là Footer height */}
+          <Routes>
+            <Route path="/" element={<Home />} />
+            <Route path="/auctions" element={<Auctions />} />
+            <Route path="/auctions/:id" element={<AuctionDetail />} />
+            <Route path="/mint" element={<Mint />} />
+            <Route path="/my-auctions" element={<MyAuctions />} />
+            <Route path="/create-auction" element={<CreateAuction />} />
+            <Route path="/create" element={<Create />} />
+            {/* <Route path="/drop" element={<Drop />} /> */}
+            <Route path="/create-nft" element={<CreateNFT />} />
+            <Route path="/new-collection" element={<NewCollection />} />
+            <Route path="/nft-detail" element={<NFTDetail />} />
+            <Route path="/mint/:id" element={<MintNFTDetail />} />
+          </Routes>
+        </div>
+        <Footer />
       </div>
-      <Footer />
-    </div>
+    </>
   );
 }
 
@@ -62,7 +84,17 @@ function App() {
   };
 
   return (
-    <>
+    <SnackbarProvider
+      maxSnack={3}
+      autoHideDuration={5000}
+      anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
+      Components={{
+        success: SnackbarContent,
+        error: SnackbarContent,
+        warning: SnackbarContent,
+        info: SnackbarContent
+      }}
+    >
       <AccountProvider>
         <Router>
           <Routes>
@@ -78,7 +110,6 @@ function App() {
           </Routes>
         </Router>
       </AccountProvider>
-
       <Snackbar
         open={snackbar.open}
         autoHideDuration={6000}
@@ -94,7 +125,7 @@ function App() {
           {snackbar.message}
         </Alert>
       </Snackbar>
-    </>
+    </SnackbarProvider>
   );
 }
 

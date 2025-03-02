@@ -1,0 +1,114 @@
+.container {
+  margin-top: 30px;
+  position: relative;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-top: 20px;
+}
+
+.title {
+  text-align: center;
+  font-weight: 600;
+  color: #04111d;
+  margin-bottom: 20px; /* Thêm khoảng cách dưới */
+}
+
+.subtitle {
+  text-align: center;
+  color: #666;
+  margin-bottom: 40px !important;
+}
+
+.nft-form {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  margin-bottom: 20px; /* Thêm khoảng cách dưới */
+}
+
+.upload-container {
+  position: relative;
+  width: 100%;
+  height: 300px;
+  margin-bottom: 20px; /* Thêm khoảng cách dưới */
+}
+
+.upload-box-col {
+  width: 100%;
+  height: 100%;
+  border: 2px dashed #ccc;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  cursor: pointer;
+  border-radius: 10px;
+  background: #fafafa;
+  overflow: hidden;
+}
+
+.upload-placeholder {
+  text-align: center;
+}
+
+.preview-container {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.preview-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 10px;
+}
+
+.delete-button {
+  position: absolute;
+  top: -15px;
+  right: -15px;
+  border: none;
+  width: 35px;
+  height: 35px;
+  border-radius: 20%;
+  padding: 8px;
+  cursor: pointer;
+  color: white;
+}
+
+.trash-icon {
+  font-size: 30px !important;
+}
+
+.create-button {
+  background: #1a7cde;
+  color: white;
+  border: none;
+  padding: 12px 20px;
+  border-radius: 10px;
+  font-size: 16px;
+  cursor: pointer;
+  margin-top: 20px; /* Thêm khoảng cách trên */
+}
+
+.create-button:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+}
+
+/* Back Button */
+.back-button {
+  position: absolute;
+  top: 20px;
+  left: 20px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  font-size: 18px;
+  font-weight: 600;
+  color: #333;
+}

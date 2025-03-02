@@ -126,6 +126,12 @@ const Header = () => {
             to="/my-auctions">
             My Auctions
           </StyledButton>
+          <StyledButton
+            color="inherit"
+            component={Link}
+            to="/create">
+            Create (Admin)
+          </StyledButton>
           {account ? (
             <>
               <WalletButton

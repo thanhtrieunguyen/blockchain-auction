@@ -8,13 +8,13 @@ const StyledGrid = styled(Grid)(({ theme }) => ({
     gap: theme.spacing(3),
 }));
 
-const MintNFTList = ({ nfts }) => {
+const MintNFTList = ({ nfts, handleMintNFT }) => {
     return (
         <Box sx={{ flexGrow: 1 }}>
             <StyledGrid container>
                 {nfts.map((nft, index) => (
                     <Grid item xs={12} sm={6} md={4} lg={2.2} key={nft.id || index}>
-                        <MintNFTCard nft={nft} />
+                        <MintNFTCard nft={nft} handleMintNFT={handleMintNFT} />
                     </Grid>
                 ))}
             </StyledGrid>

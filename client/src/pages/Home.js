@@ -168,7 +168,7 @@ const Home = () => {
                     textShadow: '0 1px 2px rgba(0,0,0,0.1)',
                   }}
                 >
-                  The world's first and largest digital marketplace for crypto collectibles and NFTs
+                  A blockchain-based platform for creating, minting, and auctioning unique digital collectibles
                 </Typography>
                 <Box sx={{ display: 'flex', gap: 2 }}>
                   <StyledButton
@@ -289,7 +289,7 @@ const Home = () => {
             </Typography>
             <Button
               component={Link}
-              to="/nfts"
+              to="/mint"
               variant="outlined"
               endIcon={<ChevronRightIcon />}
             >
@@ -343,31 +343,31 @@ const Home = () => {
           <Grid container spacing={4} sx={{ mb: 8 }}>
             <Grid item xs={12} md={4}>
               <StatCard>
-                <Typography variant="h3" sx={{ fontWeight: 700, color: '#2196f3', mb: 1 }}>
-                  10K+
+                <Typography variant="h3" color="primary" gutterBottom>
+                  100+
                 </Typography>
-                <Typography variant="h6" color="textSecondary">
-                  NFTs Created
-                </Typography>
-              </StatCard>
-            </Grid>
-            <Grid item xs={12} md={4}>
-              <StatCard>
-                <Typography variant="h3" sx={{ fontWeight: 700, color: '#2196f3', mb: 1 }}>
-                  50K+
-                </Typography>
-                <Typography variant="h6" color="textSecondary">
-                  Active Users
+                <Typography variant="h6">
+                  Active Auctions
                 </Typography>
               </StatCard>
             </Grid>
             <Grid item xs={12} md={4}>
               <StatCard>
-                <Typography variant="h3" sx={{ fontWeight: 700, color: '#2196f3', mb: 1 }}>
-                  100K+
+                <Typography variant="h3" color="primary" gutterBottom>
+                  50+
                 </Typography>
-                <Typography variant="h6" color="textSecondary">
-                  Total Sales
+                <Typography variant="h6">
+                  NFT Collections
+                </Typography>
+              </StatCard>
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <StatCard>
+                <Typography variant="h3" color="primary" gutterBottom>
+                  500+
+                </Typography>
+                <Typography variant="h6">
+                  Community Members
                 </Typography>
               </StatCard>
             </Grid>
@@ -392,18 +392,18 @@ const Home = () => {
             {[
               {
                 icon: <AccountBalanceWalletIcon sx={{ fontSize: 40, color: '#2196f3' }} />,
-                title: 'Easy to Connect',
-                description: 'Connect your crypto wallet with just one click and start trading NFTs instantly'
+                title: 'Secure Transactions',
+                description: 'Complete your NFT transactions securely using Ethereum blockchain technology'
               },
               {
                 icon: <LocalOfferIcon sx={{ fontSize: 40, color: '#2196f3' }} />,
-                title: 'Best Value',
-                description: 'Get the best value for your NFTs with our innovative auction system'
+                title: 'Transparent Bidding',
+                description: 'Participate in transparent NFT auctions with real-time updates and secure bidding'
               },
               {
                 icon: <ExploreIcon sx={{ fontSize: 40, color: '#2196f3' }} />,
-                title: 'Discover Art',
-                description: 'Explore unique digital artworks from talented creators worldwide'
+                title: 'Create & Mint NFTs',
+                description: 'Easily create and mint your own unique NFTs using our streamlined minting process'
               }
             ].map((feature, index) => (
               <Grid item xs={12} md={4} key={index}>

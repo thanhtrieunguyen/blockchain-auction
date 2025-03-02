@@ -1,0 +1,147 @@
+/* Banner tổng thể */
+.banner {
+  position: relative;
+  width: 100%;
+  height: 400px; 
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+.banner-overlay {
+  background: rgba(0, 0, 0, 0.4); /* Lớp phủ tối */
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.banner-content {
+  text-align: left;
+  color: white;
+  position: relative;
+  padding-left: 170px; 
+}
+
+/* Image góc trái */
+.image-container {
+  position: absolute;
+  top: 10px; 
+  left: 10px; 
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 50%;
+  padding: 8px; 
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(4px);
+}
+
+.banner-image {
+  width: 200px; 
+  height: 200px;
+  object-fit: cover;
+  border-radius: 10%;
+}
+
+/* Thông tin bộ sưu tập */
+.text-container {
+  padding-left: 200px; 
+}
+
+.banner-title {
+  font-size: 1.8rem; 
+  font-weight: 900 !important;
+}
+
+.banner-author {
+  font-size: 1.1rem; 
+  margin-top: 5px;
+  font-weight: 900 !important;
+}
+
+.author-name {
+  font-size: 1.1rem;
+  font-weight: 900 !important;
+  color: #f5d142;
+}
+
+.banner-price {
+  font-size: 1rem; 
+  margin-top: 5px;
+  opacity: 0.9;
+  font-weight: 900 !important;
+
+}
+
+/* Đồng hồ đếm ngược */
+.countdown {
+  display: flex;
+  justify-content: left;
+  gap: 12px; 
+  margin-top: 10px;
+}
+
+.time-box {
+  background: rgba(255, 255, 255, 0.2);
+  padding: 8px 12px; 
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-weight: 900 !important;
+  width: 60px;
+}
+
+.time-box span {
+  font-size: 0.8rem;
+  display: block;
+  margin-top: 4px;
+  opacity: 0.8;
+}
+
+/* Nút View Drop */
+.btn-container {
+  display: flex;
+  justify-content: flex-end; 
+}
+
+.view-drop-btn {
+  background: rgba(255, 255, 255, 0.15) !important; 
+  color: white !important;
+  font-weight: bold;
+  font-size: 14px; 
+  border-radius: 30px;
+  padding: 10px 25px; 
+  border: 2px solid rgba(255, 255, 255, 0.3) !important;
+  transition: all 0.3s ease-in-out;
+  backdrop-filter: blur(5px);
+  box-shadow: none !important; 
+}
+
+/* Hiệu ứng hover */
+.view-drop-btn:hover {
+  background: rgba(4, 3, 3, 0.25) !important;
+  border-color: #ffffff !important;
+  transform: scale(1.05); 
+  box-shadow: 0px 0px 8px rgba(255, 255, 255, 0.3) !important;
+}
+
+/* Swiper */
+.banner-slider {
+  width: 100%;
+  height: 100%;
+}
+
+.swiper-button-next,
+.swiper-button-prev {
+  color: white;
+}
+
+.swiper-pagination-bullet {
+  background: white;
+}
+
+.swiper-pagination-bullet-active {
+  background: yellow;
+}

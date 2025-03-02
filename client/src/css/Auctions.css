@@ -1,0 +1,22 @@
+.custom-tabs {
+    margin-top: 20px;
+    margin-left: 100px !important;
+    height: 0vh !important;
+  
+  }
+  
+  .custom-tabs .MuiTab-root {
+    font-size: 18px;
+    font-weight: 700; 
+    text-transform: none; 
+    color: #444; 
+    font-family: "Arial", sans-serif; 
+  }
+  
+  /* .custom-tabs .MuiTab-root.Mui-selected {
+  } */
+  
+  .custom-tabs .MuiTabs-indicator {
+    height: 4px; /* Dày hơn một chút */
+  }
+  

@@ -1,0 +1,102 @@
+/* Tổng thể NFT Header */
+.nft-header {
+    position: relative;
+    width: 100%;
+    height: 470px;
+    color: white;
+    font-family: Arial, sans-serif;
+  }
+  
+  /* Background */
+  .nft-background {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    background-size: cover;
+    background-position: center;
+  }
+  
+  .nft-overlay {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+  }
+  
+  /* Container chứa thông tin NFT */
+  .nft-info-container {
+    position: absolute;
+    top: 50%;
+    left: 10%;
+    transform: translateY(-50%);
+    display: flex;
+    align-items: center;
+  }
+  
+  .nft-info {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+  }
+  
+  .nft-avatar {
+    width: 100px;
+    height: 100px;
+    object-fit: cover;
+    border-radius: 10%;
+    border: 3px solid rgba(7, 7, 7, 0.5);
+  }
+  
+  .nft-title {
+    font-size: 1.8rem;
+    font-weight: bold;
+  }
+  
+  .nft-author {
+    font-size: 1rem;
+    opacity: 0.9;
+  }
+  
+  /* Thống kê NFT */
+  .nft-stats {
+    position: absolute;
+    bottom: 20px;
+    left: 55%;
+    display: flex;
+    gap: 20px;
+  }
+  
+  .nft-stats div {
+    background: rgba(7, 7, 7, 0.711);
+    padding: 10px 15px;
+    border-radius: 8px;
+    text-align: center;
+  }
+  
+  .stat-label {
+    font-size: 0.8rem;
+    opacity: 0.8;
+    font-weight: bold !important;
+
+  }
+  
+  .stat-value {
+    font-size: 0.8rem;
+    font-weight: bold !important;
+  }
+  
+
+  .minting-tag {
+    display: inline-block;
+    background: rgba(0, 255, 0, 0.2); /* Nền xanh lá trong suốt */
+    color: #00ff00; /* Màu chữ xanh lá sáng */
+    font-weight: bold;
+    font-size: 14px;
+    padding: 6px 12px;
+    border-radius: 20px;
+    border: 1px solid #00ff00; /* Viền xanh lá */
+    backdrop-filter: blur(5px);
+    margin-top: 10px;
+    text-align: center;
+    width: fit-content;
+  }
+  

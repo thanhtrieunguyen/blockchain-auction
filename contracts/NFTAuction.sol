@@ -46,18 +46,21 @@ uint256 endTime
     ) public {
         require(_startPrice > 0, "Start price must be greater than 0");
         require(_durationInMinutes > 0, "Duration must be at least 1 minute");
-
-        // Allow creation if caller owns the NFT...
-        if (_nftContract.ownerOf(_tokenId) == msg.sender) {
-            _nftContract.transferFrom(msg.sender, address(this), _tokenId);
-        } 
-        else if (_nftContract.ownerOf(_tokenId) == address(this)) {
-            uint256 prevAuctionId = activeAuctionByToken[_tokenId];
-            require(_startPrice > auctions[prevAuctionId].highestBid, "Start price must be greater than the highest bid");
-        } else {
-            revert(unicode"Bạn không phải chủ sở hữu");
-        }
-
+        
+        // Kiểm tra người gọi là chủ sở hữu của NFT
+        require(_nftContract.ownerOf(_tokenId) == msg.sender, unicode"Bạn không phải chủ sở hữu");
+        
+        // Kiểm tra xem contract auction đã được phê duyệt chưa
+        require(
+            _nftContract.getApproved(_tokenId) == address(this) || 
+            _nftContract.isApprovedForAll(msg.sender, address(this)),
+            "NFTAuction not approved to transfer this token"
+        );
+        
+        // Chuyển NFT từ người tạo đến hợp đồng auction
+        _nftContract.transferFrom(msg.sender, address(this), _tokenId);
+        
+        // Tạo phiên đấu giá mới
         auctionCounter++;
         auctions[auctionCounter] = Auction({
             creator: msg.sender,
@@ -70,7 +73,7 @@ uint256 endTime
             ended: false
         });
         activeAuctionByToken[_tokenId] = auctionCounter;
-
+    
         emit AuctionCreated(
             auctionCounter,
             msg.sender,

@@ -1,6 +1,6 @@
-import React, { useState, useContext } from 'react'; // Add useContext
-import { AccountContext } from '../context/AccountContext'; // Add this import
-import { useNavigate } from 'react-router-dom'; // Add this import
+import React, { useState, useContext } from 'react';
+import { AccountContext } from '../context/AccountContext'; 
+import { useNavigate } from 'react-router-dom'; 
 import {
     Dialog,
     DialogTitle,
@@ -11,6 +11,7 @@ import {
     IconButton,
     Button,
     Paper,
+    CircularProgress
 } from '@mui/material';
 import { styled } from '@mui/material/styles';
 import AddIcon from '@mui/icons-material/Add';
@@ -77,8 +78,9 @@ const TotalPrice = styled(Box)(({ theme }) => ({
     marginBottom: theme.spacing(2),
 }));
 
-const MintNFTDialog = ({ open, onClose, nft }) => {
+const MintNFTDialog = ({ open, onClose, nft, handleMintNFT }) => {
     const [quantity, setQuantity] = useState(1);
+    const [minting, setMinting] = useState(false);
     const { account } = useContext(AccountContext);
     const navigate = useNavigate();
     const isFree = nft.price === 0;
@@ -97,7 +99,7 @@ const MintNFTDialog = ({ open, onClose, nft }) => {
 
     const totalPrice = (nft.price * quantity).toFixed(3);
 
-    const handleMint = () => {
+    const handleMint = async () => {
         if (!account) {
             // If no wallet connected, redirect to connect wallet page
             onClose();
@@ -107,8 +109,15 @@ const MintNFTDialog = ({ open, onClose, nft }) => {
             return;
         }
         
-        console.log(`Minting ${quantity} NFTs for ${totalPrice} ETH`);
-        onClose();
+        setMinting(true);
+        try {
+            await handleMintNFT(nft.id);
+            onClose();
+        } catch (error) {
+            console.error("Failed to mint NFT:", error);
+        } finally {
+            setMinting(false);
+        }
     };
 
     const MintButton = styled(Button)(({ theme, disabled }) => ({
@@ -252,10 +261,15 @@ const MintNFTDialog = ({ open, onClose, nft }) => {
                     <MintButton
                         fullWidth
                         onClick={handleMint}
-                        disabled={!account}
+                        disabled={!account || minting}
                     >
-                        {!account ? 'Connect Wallet to Mint' : 
-                         (isFree ? 'Mint NFT' : `Mint ${quantity} NFT${quantity > 1 ? 's' : ''}`)}
+                        {minting ? (
+                            <CircularProgress size={24} color="inherit" />
+                        ) : !account ? (
+                            'Connect Wallet to Mint'
+                        ) : (
+                            isFree ? 'Mint NFT' : `Mint ${quantity} NFT${quantity > 1 ? 's' : ''}`
+                        )}
                     </MintButton>
                 </Box>
             </DialogActions>

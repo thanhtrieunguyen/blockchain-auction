@@ -1,0 +1,85 @@
+.SnackbarContent-root {
+    border-radius: 16px !important;
+    padding: 16px 32px !important;
+    min-width: 320px !important;
+    backdrop-filter: blur(12px);
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2) !important;
+    font-family: 'Orbitron', sans-serif !important;
+    animation: slideInFade 0.5s ease-out forwards;
+    position: relative;
+    overflow: hidden;
+}
+
+/* Sparkle effect overlay */
+.SnackbarContent-root::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 200%;
+    height: 100%;
+    background: linear-gradient(120deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.3) 50%, rgba(255,255,255,0.1) 100%);
+    transform: skewX(-25deg);
+    transition: left 0.5s;
+}
+
+.SnackbarContent-root:hover::before {
+    left: 100%;
+}
+
+/* Success notification */
+.SnackbarItem-variantSuccess {
+  background: linear-gradient(135deg, rgba(0, 150, 255, 0.95), rgba(0, 102, 204, 0.95)) !important;
+  border: 1px solid rgba(0, 150, 255, 0.3);
+}
+
+
+/* Error notification */
+.SnackbarItem-variantError {
+    background: linear-gradient(135deg, rgba(231,76,60,0.95), rgba(192,57,43,0.95)) !important;
+    border: 1px solid rgba(231,76,60,0.3);
+}
+
+/* Warning notification */
+.SnackbarItem-variantWarning {
+    background: linear-gradient(135deg, rgba(241,196,15,0.95), rgba(243,156,18,0.95)) !important;
+    border: 1px solid rgba(241,196,15,0.3);
+    color: #000 !important;
+}
+
+/* Info notification */
+.SnackbarItem-variantInfo {
+    background: linear-gradient(135deg, rgba(52,152,219,0.95), rgba(41,128,185,0.95)) !important;
+    border: 1px solid rgba(52,152,219,0.3);
+}
+
+/* Message text styling */
+.SnackbarContent-message {
+    font-weight: bold !important;
+    font-size: 15px !important;
+    line-height: 1.5 !important;
+}
+
+/* Close button styling */
+.SnackbarContent-action button {
+    color: inherit !important;
+    opacity: 0.8;
+    padding: 4px;
+    transition: opacity 0.3s;
+}
+
+.SnackbarContent-action button:hover {
+    opacity: 1;
+}
+
+/* Animation keyframes */
+@keyframes slideInFade {
+    0% {
+        transform: translateY(-100%);
+        opacity: 0;
+    }
+    100% {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}

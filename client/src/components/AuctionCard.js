@@ -13,10 +13,10 @@ const StyledCard = styled(Card)(({ theme }) => ({
     overflow: 'hidden',
     transition: 'transform 0.2s ease-in-out',
     '&:hover': {
-      transform: 'translateY(-4px)',
+        transform: 'translateY(-4px)',
     },
-  }));
-  
+}));
+
 
 const ImageWrapper = styled(Box)({
     position: 'relative',
@@ -32,11 +32,11 @@ const ImageWrapper = styled(Box)({
     },
 });
 
-const InfoBadge = styled(Box)(({ theme }) => ({
+const InfoBadge = styled(Box)(({ theme, status }) => ({
     position: 'absolute',
     top: 8,
     right: 8,
-    backgroundColor: 'rgba(1, 80, 255, 0.9)',
+    backgroundColor: status === 'live' ? 'rgba(1, 80, 255, 0.9)' : 'rgba(128, 128, 128, 0.9)',
     color: 'white',
     padding: '4px 12px',
     borderRadius: '20px',
@@ -55,7 +55,7 @@ const InfoBadge = styled(Box)(({ theme }) => ({
 const ContentWrapper = styled(Box)(({ theme }) => ({
     padding: theme.spacing(2),
     // background: 'linear-gradient(to top, rgba(0,0,0,0.8), rgba(0,0,0,0))',
-    color: 'black !important' ,
+    color: 'black !important',
     position: 'absolute',
     bottom: 0,
     left: 0,
@@ -76,8 +76,8 @@ const AuctionCard = ({ auction }) => {
         <StyledCard component={Link} to={`/auctions/${id}`} style={{ textDecoration: 'none' }}>
             <ImageWrapper>
                 <img src={imageUrl} alt={title} />
-                <InfoBadge>
-                    {status === 'live' ? 'Live Auction' : 'Upcoming'}
+                <InfoBadge status={status}>
+                    {status === 'live' ? 'Live Auction' : 'Ended'}
                 </InfoBadge>
             </ImageWrapper>
 

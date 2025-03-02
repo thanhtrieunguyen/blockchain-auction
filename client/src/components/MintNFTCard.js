@@ -60,7 +60,7 @@ const ContentWrapper = styled(Box)(({ theme }) => ({
     right: 0,
 }));
 
-const MintNFTCard = ({ nft }) => {
+const MintNFTCard = ({ nft, handleMintNFT }) => {
     const { title, imageUrl, price } = nft;
 
     const [dialogOpen, setDialogOpen] = useState(false);
@@ -137,6 +137,7 @@ const MintNFTCard = ({ nft }) => {
                 open={dialogOpen}
                 onClose={handleCloseDialog}
                 nft={nft}
+                handleMintNFT={handleMintNFT}
             />
         </>
     );
