@@ -160,7 +160,7 @@ function MyAuctions() {
               hasBids: hasBids,
               name: metadata.name || `NFT #${auction.tokenId}`,
               description: metadata.description || '',
-              image: metadata.image || "https://via.placeholder.com/300?text=NFT+Image"
+              image: metadata.image || "https://i.seadn.io/s/raw/files/e7718d18d665f88ca4630cdb63aef37a.png?auto=format&dpr=1&h=500"
             });
             
             // Start countdown for active auctions

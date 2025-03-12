@@ -1,23 +1,23 @@
-const NFTMinting = artifacts.require("NFTMinting");
 const NFTAuction = artifacts.require("NFTAuction");
+const TestNFT = artifacts.require("TestNFT");
 
 contract("NFTAuction", accounts => {
-    let nftMinting, nftAuction;
+    let testNFT, nftAuction;
     const owner = accounts[0];
     const bidder = accounts[1];
     const otherBidder = accounts[2];
 
     beforeEach(async () => {
-        nftMinting = await NFTMinting.new({ from: owner });
+        testNFT = await TestNFT.new({ from: owner });
         nftAuction = await NFTAuction.new({ from: owner });
+        
+        // Mint một NFT đơn giản cho test
+        await testNFT.mint(owner, 0);
+        await testNFT.approve(nftAuction.address, 0, { from: owner });
     });
 
     it("should create an auction and accept a valid bid", async () => {
-        await nftMinting.mintNFT({ from: owner });
-        await nftMinting.approve(nftAuction.address, 0, { from: owner });
-
-        // Owner creates an auction for tokenId 0 with a start price of 1 ETH and duration 1 minute
-        await nftAuction.createAuction(nftMinting.address, 0, web3.utils.toWei("1", "ether"), 1, { from: owner });
+        await nftAuction.createAuction(testNFT.address, 0, web3.utils.toWei("1", "ether"), 1, { from: owner });
         // Bidder places a bid with 2 ETH
         await nftAuction.bid(1, { from: bidder, value: web3.utils.toWei("2", "ether") });
 

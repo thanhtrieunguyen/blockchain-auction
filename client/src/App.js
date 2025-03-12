@@ -4,7 +4,6 @@ import Header from './components/Header';
 import Footer from './components/Footer';
 import Home from './pages/Home';
 import Auctions from './pages/Auctions';
-import Mint from './pages/Mint';
 import ConnectWallet from './pages/ConnectWallet';
 import AuctionDetail from './pages/AuctionDetail';
 import MyAuctions from './pages/MyAuctions';
@@ -16,12 +15,6 @@ import { useState, useEffect } from 'react';
 import { SnackbarProvider } from 'notistack';
 import SnackbarContent from './components/SnackbarContentWrapper';
 import "./css/Toast.css";
-import Create from './pages/Create';
-// import Drop from './components/Drop';
-import CreateNFT from './pages/CreateNFT';
-import NewCollection from './components/NewCollection';
-import NFTDetail from './pages/NFTDetail';
-import MintNFTDetail from './pages/MintNFTDetail';
 
 function LayoutWithHeader() {
   const location = useLocation();
@@ -42,15 +35,8 @@ function LayoutWithHeader() {
             <Route path="/" element={<Home />} />
             <Route path="/auctions" element={<Auctions />} />
             <Route path="/auctions/:id" element={<AuctionDetail />} />
-            <Route path="/mint" element={<Mint />} />
             <Route path="/my-auctions" element={<MyAuctions />} />
             <Route path="/create-auction" element={<CreateAuction />} />
-            <Route path="/create" element={<Create />} />
-            {/* <Route path="/drop" element={<Drop />} /> */}
-            <Route path="/create-nft" element={<CreateNFT />} />
-            <Route path="/new-collection" element={<NewCollection />} />
-            <Route path="/nft-detail" element={<NFTDetail />} />
-            <Route path="/mint/:id" element={<MintNFTDetail />} />
           </Routes>
         </div>
         <Footer />

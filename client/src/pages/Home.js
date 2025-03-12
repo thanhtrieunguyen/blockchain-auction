@@ -182,22 +182,6 @@ const Home = () => {
                   >
                     Explore Auctions
                   </StyledButton>
-                  <StyledButton
-                    variant="outlined"
-                    component={Link}
-                    to="/mint"
-                    startIcon={<AddCircleOutlineIcon />}
-                    sx={{
-                      borderColor: 'white',
-                      color: 'white',
-                      '&:hover': {
-                        borderColor: 'white',
-                        background: 'rgba(255, 255, 255, 0.1)',
-                      }
-                    }}
-                  >
-                    Start Creating
-                  </StyledButton>
                 </Box>
               </Box>
             </Grid>
@@ -273,64 +257,6 @@ const Home = () => {
             <IconButton
               className="scroll-button right"
               onClick={() => scroll('auctions-container', 1)}
-            >
-              <ChevronRightIcon />
-            </IconButton>
-          </ScrollSection>
-        </Container>
-      </Box>
-
-      {/* Mintable NFTs Section */}
-      <Box sx={{ py: 8 }}>
-        <Container maxWidth="lg">
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
-            <Typography variant="h4" sx={{ fontWeight: 700 }}>
-              Trending NFTs to Mint
-            </Typography>
-            <Button
-              component={Link}
-              to="/mint"
-              variant="outlined"
-              endIcon={<ChevronRightIcon />}
-            >
-              View All
-            </Button>
-          </Box>
-
-          <ScrollSection>
-            <IconButton
-              className="scroll-button left"
-              onClick={() => scroll('nfts-container', -1)}
-            >
-              <ChevronLeftIcon />
-            </IconButton>
-
-            <Box id="nfts-container" className="scroll-container">
-              {nfts.map((nft) => (
-                <ItemCard key={nft.id}>
-                  <CardActionArea component={Link} to={`/nft/${nft.id}`}>
-                    <CardMedia
-                      component="img"
-                      height="240"
-                      image={nft.image}
-                      alt={nft.title}
-                    />
-                    <CardContent>
-                      <Typography gutterBottom variant="h6" component="div">
-                        {nft.title}
-                      </Typography>
-                      <Typography variant="subtitle2" color="text.secondary">
-                        By {nft.creator}
-                      </Typography>
-                    </CardContent>
-                  </CardActionArea>
-                </ItemCard>
-              ))}
-            </Box>
-
-            <IconButton
-              className="scroll-button right"
-              onClick={() => scroll('nfts-container', 1)}
             >
               <ChevronRightIcon />
             </IconButton>

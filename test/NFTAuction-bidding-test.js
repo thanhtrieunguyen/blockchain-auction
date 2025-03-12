@@ -1,4 +1,3 @@
-const NFTMinting = artifacts.require("NFTMinting");
 const NFTAuction = artifacts.require("NFTAuction");
 
 contract("NFTAuction - Bidding", accounts => {
