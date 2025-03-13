@@ -1,189 +1,234 @@
-import React, { useState, useEffect, useContext, useRef } from 'react';
-import { 
-  Container, 
-  Typography, 
-  Box, 
-  Grid, 
-  Card, 
-  CardContent, 
-  CardMedia, 
-  Button, 
-  Divider,
-  CircularProgress, 
-  Paper,
-  Chip,
-  Avatar
-} from '@mui/material';
+import React, { useState, useEffect, useContext } from 'react';
+import { Container, Typography, Box, Grid, Card, CardMedia, CardContent, Chip, Skeleton, Button, Stack } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { AccountContext } from '../context/AccountContext';
 import { initWeb3, getContracts } from '../web3';
-import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
-import RefreshIcon from '@mui/icons-material/Refresh';
-import GavelIcon from '@mui/icons-material/Gavel';
+import { styled } from '@mui/material/styles';
+import { useSnackbar } from 'notistack';
+import MonetizationOnIcon from '@mui/icons-material/MonetizationOn';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
+import RefreshIcon from '@mui/icons-material/Refresh';
+import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
 import LocalOfferIcon from '@mui/icons-material/LocalOffer';
-import { format } from 'date-fns';
+import GavelIcon from '@mui/icons-material/Gavel';
+import { Paper, CircularProgress, Divider } from '@mui/material';
 
-function MyAuctions() {
+// Helper function to get status chip based on auction state
+const getStatusChip = (auction) => {
+  if (auction.ended) {
+    return (
+      <Chip 
+        label="Ended"
+        color="default"
+        size="small"
+        sx={{ borderRadius: '4px' }}
+      />
+    );
+  }
+  if (auction.endTime < Date.now()) {
+    return (
+      <Chip 
+        label="Ready to Finalize"
+        color="warning"
+        size="small"
+        sx={{ borderRadius: '4px' }}
+      />
+    );
+  }
+  return (
+    <Chip 
+      label="Active"
+      color="success"
+      size="small"
+      sx={{ borderRadius: '4px' }}
+    />
+  );
+};
+
+// Enhanced helper function to resolve IPFS URLs or other formats
+const resolveIPFSUri = (uri) => {
+  if (!uri) return null;
+  
+  // Handle IPFS URIs
+  if (uri.startsWith('ipfs://')) {
+    // Try multiple IPFS gateways for better reliability
+    return `https://ipfs.io/ipfs/${uri.substring(7)}`;
+  }
+  
+  // Handle base64 data URIs
+  if (uri.startsWith('data:')) {
+    return uri;
+  }
+  
+  // Handle relative URLs
+  if (uri.startsWith('/')) {
+    console.log("Relative URI found:", uri);
+    return uri;
+  }
+  
+  // For http/https URLs, return as is
+  return uri;
+};
+
+const MyAuctions = () => {
+  const [auctions, setAuctions] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null); // Add error state
+  const [countdowns, setCountdowns] = useState({}); // NEW: countdown state
   const { account } = useContext(AccountContext);
   const navigate = useNavigate();
-  const timerRefs = useRef({});
-  
-  const [loading, setLoading] = useState(true);
-  const [myAuctions, setMyAuctions] = useState([]);
-  const [error, setError] = useState('');
-  const [countdowns, setCountdowns] = useState({});
-  
-  useEffect(() => {
-    if (account) {
-      fetchMyAuctions();
-    }
-    
-    return () => {
-      // Clear any running timers when component unmounts
-      Object.values(timerRefs.current).forEach(timer => {
-        if (timer) clearInterval(timer);
-      });
-    };
-  }, [account]);
-  
-  // Format time remaining
-  const formatTimeRemaining = (timeInMs) => {
-    if (timeInMs <= 0) return "Expired";
-    
-    const seconds = Math.floor((timeInMs / 1000) % 60);
-    const minutes = Math.floor((timeInMs / (1000 * 60)) % 60);
-    const hours = Math.floor((timeInMs / (1000 * 60 * 60)) % 24);
-    const days = Math.floor(timeInMs / (1000 * 60 * 60 * 24));
-    
-    const parts = [];
-    if (days > 0) parts.push(`${days}d`);
-    if (hours > 0 || days > 0) parts.push(`${hours}h`);
-    if (minutes > 0 || hours > 0 || days > 0) parts.push(`${minutes}m`);
-    parts.push(`${seconds}s`);
-    
-    return parts.join(' ');
-  };
-  
-  const startCountdown = (auctionId, endTimeMs) => {
-    // Clear existing timer if any
-    if (timerRefs.current[auctionId]) {
-      clearInterval(timerRefs.current[auctionId]);
-    }
-    
-    // Don't start if already ended
-    if (endTimeMs <= Date.now()) {
-      setCountdowns(prev => ({...prev, [auctionId]: "Expired"}));
-      return;
-    }
-    
-    // Initial countdown value
-    setCountdowns(prev => ({
-      ...prev, 
-      [auctionId]: formatTimeRemaining(endTimeMs - Date.now())
-    }));
-    
-    // Start interval
-    timerRefs.current[auctionId] = setInterval(() => {
-      const remaining = endTimeMs - Date.now();
-      
-      if (remaining <= 0) {
-        clearInterval(timerRefs.current[auctionId]);
-        setCountdowns(prev => ({...prev, [auctionId]: "Expired"}));
-        
-        // Refresh auctions to update status
-        fetchMyAuctions();
-      } else {
-        setCountdowns(prev => ({
-          ...prev, 
-          [auctionId]: formatTimeRemaining(remaining)
-        }));
-      }
-    }, 1000);
-  };
-  
+  const { enqueueSnackbar } = useSnackbar();
+
   const fetchMyAuctions = async () => {
-    if (!account) return;
-    
-    setLoading(true);
-    setError('');
-    
     try {
+      console.log("Fetching auctions for account:", account);
+      setError(null);
+      setLoading(true);
       const web3 = await initWeb3();
       const { nftAuction, nftMinting } = await getContracts(web3);
       
-      // Get auction counter
       const auctionCounter = await nftAuction.methods.auctionCounter().call();
+      console.log("Total auctions:", auctionCounter);
+      const myAuctions = [];
       
-      let userAuctions = [];
-      
-      // Fetch all auctions
       for (let i = 1; i <= auctionCounter; i++) {
         try {
           const auction = await nftAuction.methods.auctions(i).call();
+          console.log(`Auction #${i}:`, auction);
           
-          // Check if user is the auction creator
-          if (auction.creator.toLowerCase() === account.toLowerCase()) {
-            // Get NFT metadata
-            let metadata = { name: `NFT #${auction.tokenId}`, image: '' };
-            
-            try {
-              const tokenURI = await nftMinting.methods.tokenURI(auction.tokenId).call();
-              if (tokenURI.startsWith('http')) {
-                const response = await fetch(tokenURI);
-                const data = await response.json();
-                if (data) {
-                  metadata = data;
+          // Skip if auction doesn't exist or creator doesn't match
+          if (!auction || !auction.creator || auction.creator.toLowerCase() !== account.toLowerCase()) {
+            continue;
+          }
+          
+          console.log(`Processing auction #${i} owned by me`);
+          
+          // Use nftContract from the auction data instead of undefined tokenAddress
+          const tokenAddress = auction.nftContract;
+          console.log(`NFT Contract Address: ${tokenAddress}`);
+          
+          // Default metadata
+          let metadata = { 
+            name: `NFT #${auction.tokenId}`, 
+            image: 'https://via.placeholder.com/400x400?text=No+Image', 
+            description: '' 
+          };
+          
+          try {
+            if (tokenAddress) {
+              console.log(`Fetching metadata for NFT at address ${tokenAddress}, token ID ${auction.tokenId}`);
+              
+              let tokenURI;
+              try {
+                // Check if the token is from our own NFT contract
+                if (tokenAddress.toLowerCase() === nftMinting._address.toLowerCase()) {
+                  console.log("Using internal NFT contract");
+                  tokenURI = await nftMinting.methods.tokenURI(auction.tokenId).call();
+                } else {
+                  console.log("Using external NFT contract");
+                  // Create contract instance for external NFT
+                  const externalNFTContract = new web3.eth.Contract(
+                    [{
+                      "inputs": [{"internalType": "uint256", "name": "tokenId", "type": "uint256"}],
+                      "name": "tokenURI",
+                      "outputs": [{"internalType": "string", "name": "", "type": "string"}],
+                      "stateMutability": "view",
+                      "type": "function"
+                    }],
+                    tokenAddress
+                  );
+                  tokenURI = await externalNFTContract.methods.tokenURI(auction.tokenId).call();
+                }
+                console.log("Raw tokenURI:", tokenURI);
+              } catch (uriError) {
+                console.error("Failed to get tokenURI:", uriError);
+                throw new Error("Could not retrieve token URI");
+              }
+              
+              if (tokenURI) {
+                try {
+                  // Resolve the URI
+                  const resolvedURI = resolveIPFSUri(tokenURI);
+                  console.log("Resolved tokenURI:", resolvedURI);
+                  
+                  if (resolvedURI) {
+                    // Fetch metadata
+                    const response = await fetch(resolvedURI);
+                    if (!response.ok) {
+                      throw new Error(`HTTP error! Status: ${response.status}`);
+                    }
+                    
+                    const data = await response.json();
+                    console.log("NFT Metadata:", data);
+                    
+                    if (data) {
+                      // Process image URL
+                      let imageUrl = data.image;
+                      if (imageUrl) {
+                        imageUrl = resolveIPFSUri(imageUrl);
+                        console.log("Resolved image URL:", imageUrl);
+                      }
+                      
+                      metadata = {
+                        name: data.name || `NFT #${auction.tokenId}`,
+                        image: imageUrl || 'https://via.placeholder.com/400x400?text=No+Image',
+                        description: data.description || ''
+                      };
+                    }
+                  }
+                } catch (metadataError) {
+                  console.error("Error fetching/parsing metadata:", metadataError);
                 }
               }
-            } catch (err) {
-              console.warn("Could not fetch NFT metadata", err);
             }
-            
-            // Calculate auction status
-            const endTimeMs = parseInt(auction.endTime) * 1000;
-            const now = Date.now();
-            const hasEnded = auction.ended || now > endTimeMs;
-            const hasBids = auction.highestBidder !== '0x0000000000000000000000000000000000000000';
-            
-            // Add to user auctions
-            userAuctions.push({
-              id: i,
-              tokenId: auction.tokenId,
-              startPrice: web3.utils.fromWei(auction.startPrice, 'ether'),
-              highestBid: web3.utils.fromWei(auction.highestBid, 'ether'),
-              endTime: endTimeMs,
-              endTimeFormatted: format(new Date(endTimeMs), 'MMM dd, yyyy HH:mm'),
-              creator: auction.creator,
-              highestBidder: auction.highestBidder,
-              ended: hasEnded,
-              hasBids: hasBids,
-              name: metadata.name || `NFT #${auction.tokenId}`,
-              description: metadata.description || '',
-              image: metadata.image || "https://i.seadn.io/s/raw/files/e7718d18d665f88ca4630cdb63aef37a.png?auto=format&dpr=1&h=500"
-            });
-            
-            // Start countdown for active auctions
-            if (!hasEnded) {
-              startCountdown(i, endTimeMs);
-            }
+          } catch (metaErr) {
+            console.error(`Metadata fetch error for auction #${i}:`, metaErr);
           }
-        } catch (err) {
-          console.error(`Error fetching auction #${i}:`, err);
+          
+          // Calculate auction status and countdown values
+          const endTimeMs = parseInt(auction.endTime, 10) * 1000;
+          const now = Date.now();
+          const hasEnded = now >= endTimeMs || auction.ended;
+          // Fix hasBids calculation (highestBid was being compared as string)
+          const hasBids = auction.highestBid && auction.highestBid > 0;
+          const endTimeFormatted = new Date(endTimeMs).toLocaleString();
+          
+          const auctionData = {
+            id: i,
+            tokenId: auction.tokenId,
+            tokenAddress: tokenAddress, // Use the tokenAddress we extracted from nftContract
+            startPrice: web3.utils.fromWei(auction.startPrice, 'ether'),
+            highestBid: web3.utils.fromWei(auction.highestBid, 'ether'),
+            highestBidder: auction.highestBidder,
+            endTime: endTimeMs,
+            endTimeFormatted,
+            hasEnded,
+            ended: auction.ended,
+            hasBids,
+            name: metadata.name,
+            image: metadata.image,
+            description: metadata.description
+          };
+          
+          console.log("Adding auction to list:", auctionData);
+          myAuctions.push(auctionData);
+        } catch (error) {
+          console.error(`Error processing auction #${i}:`, error);
         }
       }
       
-      // Sort by active auctions first, then by end time (newest first)
-      userAuctions.sort((a, b) => {
-        if (a.ended !== b.ended) return a.ended ? 1 : -1;
+      // Sort auctions: active first, then by end time
+      myAuctions.sort((a, b) => {
+        if (a.hasEnded !== b.hasEnded) return a.hasEnded ? 1 : -1;
         return b.endTime - a.endTime;
       });
       
-      setMyAuctions(userAuctions);
-      
-    } catch (err) {
-      console.error("Error fetching auctions:", err);
-      setError('Could not load auctions. Please try again.');
+      console.log("Final auctions list:", myAuctions);
+      setAuctions(myAuctions);
+    } catch (error) {
+      console.error("Error loading auctions:", error);
+      setError(error.message || "Failed to load your auctions");
+      enqueueSnackbar("Failed to load your auctions", { variant: "error" });
     } finally {
       setLoading(false);
     }
@@ -197,11 +242,11 @@ function MyAuctions() {
       
       await nftAuction.methods.finalizeAuction(auctionId).send({ from: account });
       
-      alert('Auction finalized successfully!');
+      enqueueSnackbar("Auction finalized successfully!", { variant: "success" });
       fetchMyAuctions();
-    } catch (err) {
-      console.error("Error finalizing auction:", err);
-      alert(`Error finalizing auction: ${err.message}`);
+    } catch (error) {
+      console.error("Error finalizing auction:", error);
+      enqueueSnackbar(error.message || "Failed to finalize auction", { variant: "error" });
     } finally {
       setLoading(false);
     }
@@ -209,62 +254,50 @@ function MyAuctions() {
 
   const handleCancelAuction = async (auctionId) => {
     try {
-      if (!window.confirm('Are you sure you want to cancel this auction?')) {
-        return;
-      }
-      
       setLoading(true);
       const web3 = await initWeb3();
       const { nftAuction } = await getContracts(web3);
       
       await nftAuction.methods.cancelAuction(auctionId).send({ from: account });
       
-      alert('Auction cancelled successfully!');
+      enqueueSnackbar("Auction cancelled successfully!", { variant: "success" });
       fetchMyAuctions();
-    } catch (err) {
-      console.error("Error cancelling auction:", err);
-      alert(`Error cancelling auction: ${err.message}`);
+    } catch (error) {
+      console.error("Error cancelling auction:", error);
+      enqueueSnackbar(error.message || "Failed to cancel auction", { variant: "error" });
     } finally {
       setLoading(false);
     }
   };
-  
-  const getStatusChip = (auction) => {
-    if (auction.ended) {
-      if (auction.hasBids) {
-        return <Chip 
-          label="Completed" 
-          color="success" 
-          size="small" 
-          sx={{ fontWeight: 500, borderRadius: '4px' }}
-        />;
-      } else {
-        return <Chip 
-          label="Ended (No bids)" 
-          color="warning" 
-          size="small" 
-          sx={{ fontWeight: 500, borderRadius: '4px' }}
-        />;
-      }
-    } else {
-      if (auction.endTime < Date.now()) {
-        return <Chip 
-          label="Ready to finalize" 
-          color="primary" 
-          size="small" 
-          sx={{ fontWeight: 500, borderRadius: '4px' }}
-        />;
-      } else {
-        return <Chip 
-          label="Active" 
-          color="info" 
-          size="small" 
-          sx={{ fontWeight: 500, borderRadius: '4px' }}
-        />;
-      }
+
+  useEffect(() => {
+    if (!account) {
+      navigate('/connect-wallet', { state: { returnPath: '/my-auctions' } });
+      return;
     }
-  };
-  
+    fetchMyAuctions();
+  }, [account, navigate]);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const newCountdowns = {};
+      auctions.forEach((auction) => {
+        if (!auction.hasEnded) {
+          const remainingMs = auction.endTime - Date.now();
+          if (remainingMs > 0) {
+            const minutes = Math.floor((remainingMs / 1000 / 60) % 60);
+            const seconds = Math.floor((remainingMs / 1000) % 60);
+            newCountdowns[auction.id] = `${minutes}m ${seconds}s`;
+          } else {
+            newCountdowns[auction.id] = "00m 00s";
+          }
+        }
+      });
+      setCountdowns(newCountdowns);
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [auctions]);
+
   return (
     <Container maxWidth="lg" sx={{ mt: 4, mb: 8 }}>
       <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -302,7 +335,7 @@ function MyAuctions() {
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
           <CircularProgress />
         </Box>
-      ) : myAuctions.length === 0 ? (
+      ) : auctions.length === 0 ? (
         <Paper sx={{ p: 4, textAlign: 'center', borderRadius: 2, boxShadow: 2 }}>
           <Typography variant="h6" gutterBottom>
             You haven't created any auctions yet
@@ -320,7 +353,7 @@ function MyAuctions() {
         </Paper>
       ) : (
         <Grid container spacing={3}>
-          {myAuctions.map((auction) => (
+          {auctions.map((auction) => (
             <Grid item xs={12} md={6} lg={4} key={auction.id}>
               <Card sx={{ 
                 height: '100%', 
@@ -339,9 +372,14 @@ function MyAuctions() {
                   <CardMedia
                     component="img"
                     height="200"
-                    image={auction.image}
+                    image={auction.image || 'https://via.placeholder.com/400x400?text=No+Image'}
                     alt={auction.name}
                     sx={{ objectFit: 'cover' }}
+                    onError={(e) => {
+                      console.error("Image failed to load:", e.target.src);
+                      e.target.onerror = null;
+                      e.target.src = 'https://via.placeholder.com/400x400?text=No+Image';
+                    }}
                   />
                   
                   {/* Status badge */}
@@ -392,11 +430,11 @@ function MyAuctions() {
                   
                   <Divider sx={{ mb: 2 }} />
                   
-                  {/* Price info */}
+                  {/* Price info - Fixed DOM nesting */}
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
                     <Box display="flex" alignItems="center">
                       <LocalOfferIcon fontSize="small" sx={{ color: 'text.secondary', mr: 1 }} />
-                      <Typography variant="body2" color="text.secondary">
+                      <Typography variant="body2" color="text.secondary" component="span">
                         {auction.hasBids ? 'Current bid:' : 'Start price:'}
                       </Typography>
                     </Box>
@@ -422,15 +460,15 @@ function MyAuctions() {
                     </Typography>
                   </Box>
                   
-                  {/* Bid status */}
+                  {/* Bid status - Fixed DOM nesting */}
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
                     <Box display="flex" alignItems="center">
                       <GavelIcon fontSize="small" sx={{ color: 'text.secondary', mr: 1 }} />
-                      <Typography variant="body2" color="text.secondary">
+                      <Typography variant="body2" color="text.secondary" component="span">
                         Bids:
                       </Typography>
                     </Box>
-                    <Typography variant="body2">
+                    <Box>
                       {auction.hasBids ? (
                         <Chip 
                           size="small" 
@@ -448,7 +486,7 @@ function MyAuctions() {
                           sx={{ height: 24, borderRadius: '4px' }}
                         />
                       )}
-                    </Typography>
+                    </Box>
                   </Box>
                   
                   {/* Action buttons */}

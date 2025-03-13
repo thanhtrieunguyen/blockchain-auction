@@ -1,23 +1,25 @@
+const NFTMinting = artifacts.require("NFTMinting");
 const NFTAuction = artifacts.require("NFTAuction");
-const TestNFT = artifacts.require("TestNFT");
 
 contract("NFTAuction", accounts => {
-    let testNFT, nftAuction;
+    let nftMinting, nftAuction;
     const owner = accounts[0];
     const bidder = accounts[1];
     const otherBidder = accounts[2];
 
     beforeEach(async () => {
-        testNFT = await TestNFT.new({ from: owner });
+        nftMinting = await NFTMinting.new({ from: owner });
         nftAuction = await NFTAuction.new({ from: owner });
         
-        // Mint một NFT đơn giản cho test
-        await testNFT.mint(owner, 0);
-        await testNFT.approve(nftAuction.address, 0, { from: owner });
+        // Thay thế mintNFT bằng testMint
+        await nftMinting.testMint(owner, { from: owner });
     });
 
     it("should create an auction and accept a valid bid", async () => {
-        await nftAuction.createAuction(testNFT.address, 0, web3.utils.toWei("1", "ether"), 1, { from: owner });
+        await nftMinting.approve(nftAuction.address, 0, { from: owner });
+
+        // Owner creates an auction for tokenId 0 with a start price of 1 ETH and duration 1 minute
+        await nftAuction.createAuction(nftMinting.address, 0, web3.utils.toWei("1", "ether"), 1, { from: owner });
         // Bidder places a bid with 2 ETH
         await nftAuction.bid(1, { from: bidder, value: web3.utils.toWei("2", "ether") });
 
@@ -27,7 +29,6 @@ contract("NFTAuction", accounts => {
     });
 
     it("should not accept a bid below the start price", async () => {
-        await nftMinting.mintNFT({ from: owner });
         await nftMinting.approve(nftAuction.address, 0, { from: owner });
 
         await nftAuction.createAuction(nftMinting.address, 0, web3.utils.toWei("1", "ether"), 1, { from: owner });
@@ -41,7 +42,6 @@ contract("NFTAuction", accounts => {
     });
 
     it("should not accept a bid below the current highest bid", async () => {
-        await nftMinting.mintNFT({ from: owner });
         await nftMinting.approve(nftAuction.address, 0, { from: owner });
 
         // Owner creates an auction for tokenId 0 with a start price of 1 ETH and duration 1 minute
@@ -59,7 +59,6 @@ contract("NFTAuction", accounts => {
     });
 
     it("should not accept a bid after the auction has ended", async () => {
-        await nftMinting.mintNFT({ from: owner });
         await nftMinting.approve(nftAuction.address, 0, { from: owner });
         await nftAuction.createAuction(nftMinting.address, 0, web3.utils.toWei("1", "ether"), 1, { from: owner });
 
@@ -86,7 +85,6 @@ contract("NFTAuction", accounts => {
     });
 
     it("should not accept a bid if the auction does not exist", async () => {
-        await nftMinting.mintNFT({ from: owner });
         await nftMinting.approve(nftAuction.address, 0, { from: owner });
 
         // Bidder places a bid with 2 ETH
@@ -99,7 +97,6 @@ contract("NFTAuction", accounts => {
     });
 
     it("should not accept a bid if the auction has been finalized", async () => {
-        await nftMinting.mintNFT({ from: owner });
         await nftMinting.approve(nftAuction.address, 0, { from: owner });
         await nftAuction.createAuction(nftMinting.address, 0, web3.utils.toWei("1", "ether"), 1, { from: owner });
 
@@ -128,7 +125,6 @@ contract("NFTAuction", accounts => {
     });
 
     it("should refund the previous highest bidder when a higher bid is placed", async () => {
-        await nftMinting.mintNFT({ from: owner });
         await nftMinting.approve(nftAuction.address, 0, { from: owner });
         await nftAuction.createAuction(nftMinting.address, 0, web3.utils.toWei("1", "ether"), 1, { from: owner });
 
@@ -146,7 +142,6 @@ contract("NFTAuction", accounts => {
     });
 
     it("should not refund the previous highest bidder when a lower bid is placed", async () => {
-        await nftMinting.mintNFT({ from: owner });
         await nftMinting.approve(nftAuction.address, 0, { from: owner });
         await nftAuction.createAuction(nftMinting.address, 0, web3.utils.toWei("1", "ether"), 1, { from: owner });
 
@@ -163,7 +158,6 @@ contract("NFTAuction", accounts => {
     });
 
     it("should not accepte creator bid", async () => {
-        await nftMinting.mintNFT({ from: owner });
         await nftMinting.approve(nftAuction.address, 0, { from: owner });
         await nftAuction.createAuction(nftMinting.address, 0, web3.utils.toWei("1", "ether"), 1, { from: owner });
 
@@ -177,7 +171,6 @@ contract("NFTAuction", accounts => {
 
     // Creator nhận được tiền đấu giá sau khi đấu giá kết thúc
     it("should pay creator after auction ends", async () => {
-        await nftMinting.mintNFT({ from: owner });
         await nftMinting.approve(nftAuction.address, 0, { from: owner });
         await nftAuction.createAuction(nftMinting.address, 0, web3.utils.toWei("1", "ether"), 1, { from: owner });
 
@@ -209,7 +202,6 @@ contract("NFTAuction", accounts => {
     });
 
     it("should refund the exact bid amount to the previous highest bidder", async () => {
-        await nftMinting.mintNFT({ from: owner });
         await nftMinting.approve(nftAuction.address, 0, { from: owner });
         await nftAuction.createAuction(nftMinting.address, 0, web3.utils.toWei("1", "ether"), 1, { from: owner });
 
@@ -227,7 +219,6 @@ contract("NFTAuction", accounts => {
     });
 
     it("should transfer NFT to highest bidder after auction ends", async () => {
-        await nftMinting.mintNFT({ from: owner });
         await nftMinting.approve(nftAuction.address, 0, { from: owner });
         await nftAuction.createAuction(nftMinting.address, 0, web3.utils.toWei("1", "ether"), 1, { from: owner });
 

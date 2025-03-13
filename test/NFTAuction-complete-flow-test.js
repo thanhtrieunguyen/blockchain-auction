@@ -1,3 +1,4 @@
+const NFTMinting = artifacts.require("NFTMinting");
 const NFTAuction = artifacts.require("NFTAuction");
 
 contract("NFTAuction - Complete Flow", accounts => {
@@ -10,7 +11,7 @@ contract("NFTAuction - Complete Flow", accounts => {
         nftMinting = await NFTMinting.new({ from: creator });
         nftAuction = await NFTAuction.new({ from: creator });
         // Mint NFT và approve cho auction contract
-        await nftMinting.mintNFT({ from: creator });
+        await nftMinting.testMint(creator, { from: creator });  // Thay mintNFT bằng testMint
         await nftMinting.approve(nftAuction.address, 0, { from: creator });
     });
 

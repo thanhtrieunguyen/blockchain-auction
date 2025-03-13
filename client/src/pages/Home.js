@@ -1,6 +1,6 @@
 import React from 'react';
 import { Container, Typography, Button, Box, Grid, Paper } from '@mui/material';
-import { styled } from '@mui/material/styles';
+import { styled, useTheme } from '@mui/material/styles';
 import { Link } from 'react-router-dom';
 import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
 import ExploreIcon from '@mui/icons-material/Explore';
@@ -110,7 +110,7 @@ const ItemCard = styled(Card)(({ theme }) => ({
 
 const Home = () => {
   const [auctions, setAuctions] = useState([]);
-  const [nfts, setNfts] = useState([]);
+  const theme = useTheme();
 
   useEffect(() => {
     // Giả lập dữ liệu - thay thế bằng API call thực tế
@@ -121,15 +121,6 @@ const Home = () => {
       { id: 4, title: "Azuki #789", image: "https://i.seadn.io/s/primary-drops/0x2f3f30dda2ee71375a02d30d8521b1cf13281338/34285054:about:preview_media:01b1f678-f9e6-4ad9-9e51-b67c8d1c4125.png?", price: "3.0 ETH" },
       { id: 5, title: "Art Block #234", image: "https://i.seadn.io/s/primary-drops/0x2f3f30dda2ee71375a02d30d8521b1cf13281338/34285054:about:preview_media:01b1f678-f9e6-4ad9-9e51-b67c8d1c4125.png?", price: "0.8 ETH" },
       { id: 6, title: "NFT World #567", image: "https://i.seadn.io/s/primary-drops/0x2f3f30dda2ee71375a02d30d8521b1cf13281338/34285054:about:preview_media:01b1f678-f9e6-4ad9-9e51-b67c8d1c4125.png?", price: "1.5 ETH" },
-    ]);
-
-    setNfts([
-      { id: 1, title: "Digital Art #1", image: "https://i.seadn.io/s/primary-drops/0x2f3f30dda2ee71375a02d30d8521b1cf13281338/34285054:about:preview_media:01b1f678-f9e6-4ad9-9e51-b67c8d1c4125.png?", creator: "Artist One" },
-      { id: 2, title: "Collection #2", image: "https://i.seadn.io/s/primary-drops/0x2f3f30dda2ee71375a02d30d8521b1cf13281338/34285054:about:preview_media:01b1f678-f9e6-4ad9-9e51-b67c8d1c4125.png?", creator: "Artist Two" },
-      { id: 3, title: "Pixel Art #3", image: "https://i.seadn.io/s/primary-drops/0x2f3f30dda2ee71375a02d30d8521b1cf13281338/34285054:about:preview_media:01b1f678-f9e6-4ad9-9e51-b67c8d1c4125.png?", creator: "Artist Three" },
-      { id: 4, title: "3D Model #4", image: "https://i.seadn.io/s/primary-drops/0x2f3f30dda2ee71375a02d30d8521b1cf13281338/34285054:about:preview_media:01b1f678-f9e6-4ad9-9e51-b67c8d1c4125.png?", creator: "Artist Four" },
-      { id: 5, title: "Animation #5", image: "https://i.seadn.io/s/primary-drops/0x2f3f30dda2ee71375a02d30d8521b1cf13281338/34285054:about:preview_media:01b1f678-f9e6-4ad9-9e51-b67c8d1c4125.png?", creator: "Artist Five" },
-      { id: 6, title: "Photo #6", image: "https://i.seadn.io/s/primary-drops/0x2f3f30dda2ee71375a02d30d8521b1cf13281338/34285054:about:preview_media:01b1f678-f9e6-4ad9-9e51-b67c8d1c4125.png?", creator: "Artist Six" },
     ]);
   }, []);
 
@@ -158,7 +149,7 @@ const Home = () => {
                     textShadow: '0 2px 4px rgba(0,0,0,0.2)',
                   }}
                 >
-                  Discover, Collect & Sell Extraordinary NFTs
+                  Discover & Auction Extraordinary NFTs
                 </Typography>
                 <Typography
                   variant="h5"
@@ -168,7 +159,7 @@ const Home = () => {
                     textShadow: '0 1px 2px rgba(0,0,0,0.1)',
                   }}
                 >
-                  A blockchain-based platform for creating, minting, and auctioning unique digital collectibles
+                  A blockchain-based platform for auctioning unique digital collectibles with secure refunds
                 </Typography>
                 <Box sx={{ display: 'flex', gap: 2 }}>
                   <StyledButton
@@ -181,6 +172,22 @@ const Home = () => {
                     }}
                   >
                     Explore Auctions
+                  </StyledButton>
+                  <StyledButton
+                    variant="outlined"
+                    component={Link}
+                    to="/create-auction"
+                    startIcon={<AddCircleOutlineIcon />}
+                    sx={{
+                      borderColor: 'white',
+                      color: 'white',
+                      '&:hover': {
+                        borderColor: 'white',
+                        background: 'rgba(255, 255, 255, 0.1)',
+                      }
+                    }}
+                  >
+                    Create Auction
                   </StyledButton>
                 </Box>
               </Box>
@@ -328,8 +335,8 @@ const Home = () => {
               },
               {
                 icon: <ExploreIcon sx={{ fontSize: 40, color: '#2196f3' }} />,
-                title: 'Create & Mint NFTs',
-                description: 'Easily create and mint your own unique NFTs using our streamlined minting process'
+                title: 'Reliable Refunds',
+                description: 'Our smart contracts ensure automatic refunds when outbid or when auctions are cancelled'
               }
             ].map((feature, index) => (
               <Grid item xs={12} md={4} key={index}>

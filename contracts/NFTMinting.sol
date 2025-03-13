@@ -1,96 +1,61 @@
-// // SPDX-License-Identifier: MIT
-// pragma solidity ^0.8.0;
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
 
-// import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
-// import "@openzeppelin/contracts/access/Ownable.sol";
-// import "@openzeppelin/contracts/utils/Strings.sol";
+import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/utils/Strings.sol";
 
-// contract NFTMinting is ERC721, Ownable {
-//     using Strings for uint256;
+contract NFTMinting is ERC721, Ownable {
+    using Strings for uint256;
 
-//     uint256 public tokenCounter;
-//     mapping(uint256 => string) private _tokenURIs;
-//     mapping(uint256 => uint256) public mintPrices;
-//     mapping(uint256 => bool) public availableToMint;
+    uint256 public tokenCounter;
+    mapping(uint256 => string) private _tokenURIs;
+    
+    // Base URI for metadata
+    string public baseURI;
 
-//     event NFTCreated(uint256 indexed tokenId, string tokenURI, uint256 price);
-//     event NFTMinted(address indexed minter, uint256 indexed tokenId);
+    constructor() ERC721("BoredApeYachtClub", "BAYC") {
+        tokenCounter = 0;
+        baseURI = "https://ipfs.io/ipfs/QmeSjSinHpPnmXmspMjwiXyN6zS4E9zccariGR3jxcaWtq/";
+    }
 
-//     constructor() ERC721("MyNFT", "MNFT") {
-//         tokenCounter = 0;
-//     }
+    // Hàm để cài đặt URI cho token
+    function _setTokenURI(uint256 tokenId, string memory _tokenURI) internal virtual {
+        require(_exists(tokenId), "URI set of nonexistent token");
+        _tokenURIs[tokenId] = _tokenURI;
+    }
+    
+    function setBaseURI(string memory newBaseURI) public onlyOwner {
+        baseURI = newBaseURI;
+    }
+    
+    // Add a public function that can be called from migration script
+    function setTokenURI(uint256 tokenId, string memory _tokenURI) public onlyOwner {
+        _setTokenURI(tokenId, _tokenURI);
+    }
 
-//     // Chỉ admin có thể tạo NFT mới
-//     function createNFT(
-//         string memory _tokenURI,
-//         uint256 price
-//     ) public onlyOwner returns (uint256) {
-//         uint256 newTokenId = tokenCounter;
-//         _tokenURIs[newTokenId] = _tokenURI;
-//         mintPrices[newTokenId] = price;
-//         availableToMint[newTokenId] = true;
-
-//         tokenCounter++;
-//         emit NFTCreated(newTokenId, _tokenURI, price);
-//         return newTokenId;
-//     }
-
-//     // Người dùng có thể mint NFT đã được tạo
-//     function mintNFT(uint256 tokenId) public payable {
-//         require(availableToMint[tokenId], "NFT is not available to mint");
-//         require(msg.value >= mintPrices[tokenId], "Insufficient payment");
-//         require(!_exists(tokenId), "NFT already minted");
-
-//         _safeMint(msg.sender, tokenId);
-//         availableToMint[tokenId] = false;
-
-//         // Hoàn trả tiền thừa nếu có
-//         if (msg.value > mintPrices[tokenId]) {
-//             payable(msg.sender).transfer(msg.value - mintPrices[tokenId]);
-//         }
-
-//         emit NFTMinted(msg.sender, tokenId);
-//     }
-
-//     // Lấy URI của token
-//     function tokenURI(
-//         uint256 tokenId
-//     ) public view virtual override returns (string memory) {
-//         require(
-//             _exists(tokenId) || availableToMint[tokenId],
-//             "URI query for nonexistent token"
-//         );
-//         return _tokenURIs[tokenId];
-//     }
-
-//     // Lấy giá mint của token
-//     function getMintPrice(uint256 tokenId) public view returns (uint256) {
-//         require(availableToMint[tokenId], "NFT is not available to mint");
-//         return mintPrices[tokenId];
-//     }
-
-//     // Lấy danh sách NFT có thể mint
-//     function getAvailableNFTs() public view returns (uint256[] memory) {
-//         uint256 count = 0;
-//         for (uint256 i = 0; i < tokenCounter; i++) {
-//             if (availableToMint[i]) count++;
-//         }
-
-//         uint256[] memory availableTokens = new uint256[](count);
-//         uint256 index = 0;
-//         for (uint256 i = 0; i < tokenCounter; i++) {
-//             if (availableToMint[i]) {
-//                 availableTokens[index] = i;
-//                 index++;
-//             }
-//         }
-//         return availableTokens;
-//     }
-
-//     // Admin có thể rút tiền
-//     function withdraw() public onlyOwner {
-//         uint256 balance = address(this).balance;
-//         require(balance > 0, "No balance to withdraw");
-//         payable(owner()).transfer(balance);
-//     }
-// }
+    // Lấy URI của token
+    function tokenURI(
+        uint256 tokenId
+    ) public view virtual override returns (string memory) {
+        require(_exists(tokenId), "URI query for nonexistent token");
+        
+        string memory _tokenURI = _tokenURIs[tokenId];
+        
+        // If token URI is set, return it
+        if (bytes(_tokenURI).length > 0) {
+            return _tokenURI;
+        }
+        
+        // If not, return the combination of base URI and token ID
+        return string(abi.encodePacked(baseURI, Strings.toString(tokenId)));
+    }
+    
+    // Test mint function for testing only
+    function testMint(address to) public onlyOwner {
+        uint256 newTokenId = tokenCounter;
+        _safeMint(to, newTokenId);
+        // Don't set URI here, let the migration script do it
+        tokenCounter++;
+    }
+}

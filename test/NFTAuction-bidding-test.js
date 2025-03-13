@@ -1,3 +1,4 @@
+const NFTMinting = artifacts.require("NFTMinting");
 const NFTAuction = artifacts.require("NFTAuction");
 
 contract("NFTAuction - Bidding", accounts => {
@@ -9,7 +10,7 @@ contract("NFTAuction - Bidding", accounts => {
     beforeEach(async () => {
         nftMinting = await NFTMinting.new({ from: owner });
         nftAuction = await NFTAuction.new({ from: owner });
-        await nftMinting.mintNFT({ from: owner });
+        await nftMinting.testMint(owner, { from: owner });  // Thay mintNFT bằng testMint
         await nftMinting.approve(nftAuction.address, 0, { from: owner });
         await nftAuction.createAuction(nftMinting.address, 0, web3.utils.toWei("1", "ether"), 1, { from: owner });
     });

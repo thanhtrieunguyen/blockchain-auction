@@ -15,6 +15,8 @@ import { useState, useEffect } from 'react';
 import { SnackbarProvider } from 'notistack';
 import SnackbarContent from './components/SnackbarContentWrapper';
 import "./css/Toast.css";
+import NewCollection from './components/NewCollection';
+import NFTDetail from './pages/NFTDetail';
 
 function LayoutWithHeader() {
   const location = useLocation();
@@ -37,6 +39,8 @@ function LayoutWithHeader() {
             <Route path="/auctions/:id" element={<AuctionDetail />} />
             <Route path="/my-auctions" element={<MyAuctions />} />
             <Route path="/create-auction" element={<CreateAuction />} />
+            <Route path="/new-collection" element={<NewCollection />} />
+            <Route path="/mint/:id" element={<NFTDetail />} />
           </Routes>
         </div>
         <Footer />

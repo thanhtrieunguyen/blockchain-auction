@@ -1,61 +1,39 @@
-import React, { useState, useEffect, useContext } from "react";
-import { Box, Tabs, Tab, Button, CircularProgress, IconButton, Typography } from "@mui/material";
-import AddIcon from "@mui/icons-material/Add";
-import RemoveIcon from "@mui/icons-material/Remove";
-import { useParams } from "react-router-dom";
-import NFTHeader from "../components/NFTHeader";
-import "../css/NFTDetail.css";
-import Overview from "../components/Overview";
-import { AccountContext } from "../context/AccountContext";
-import { useSnackbar } from "notistack";
-import { initWeb3, getContracts } from "../web3";
+import React, { useState, useEffect, useContext } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { Box, Typography, Button, Grid, Paper, Divider, Chip, Avatar, CircularProgress } from '@mui/material';
+import { styled } from '@mui/material/styles';
+import { AccountContext } from '../context/AccountContext';
+import { useSnackbar } from 'notistack';
+import { initWeb3, getContracts } from '../web3';
+import NFTHeader from '../components/NFTHeader';
 
 const NFTDetail = () => {
   const { id } = useParams();
+  const { account } = useContext(AccountContext);
+  const navigate = useNavigate();
+  const { enqueueSnackbar } = useSnackbar();
   const [nft, setNft] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [minting, setMinting] = useState(false);
-  const [value, setValue] = useState(0);
-  const [quantity, setQuantity] = useState(1);
-  const { account } = useContext(AccountContext);
-  const { enqueueSnackbar } = useSnackbar();
+  const [auctionLoading, setAuctionLoading] = useState(false);
 
-  const handleChange = (event, newValue) => {
-    setValue(newValue);
-  };
-
-  // Xử lý tăng/giảm số lượng
-  const handleDecrease = () => {
-    if (quantity > 1) {
-      setQuantity(prev => prev - 1);
-    }
-  };
-
-  const handleIncrease = () => {
-    setQuantity(prev => prev + 1);
-  };
-
-  // Fetch NFT data by ID
   useEffect(() => {
     const fetchNFTData = async () => {
       try {
         setLoading(true);
         
-        // Vì không có API, chúng ta sẽ sử dụng dữ liệu mẫu
-        // Trong môi trường thực tế, bạn sẽ gọi API hoặc lấy dữ liệu từ blockchain
+        // Giả lập việc tải dữ liệu từ blockchain
         setTimeout(() => {
           setNft({
             id: id,
-            title: "NFT Collection #" + id,
-            description: "This is a unique digital collectible NFT from our exclusive collection. Each piece is carefully crafted and features unique properties that make it valuable in the digital art world.",
-            imageUrl: `https://picsum.photos/id/${Number(id) + 100}/500/500`,
-            price: 0.05,
-            creator: "0x8901Ab..." + id,
+            name: `Amazing NFT #${id}`,
+            description: "This is a unique digital collectible representing ownership of exclusive content.",
+            image: `https://picsum.photos/id/${parseInt(id) + 100}/800/800`,
+            owner: "0xABC...123",
+            creator: "Artist Studio",
+            creationDate: "2023-04-15",
             properties: [
-              { type: "Rarity", value: "Rare" },
-              { type: "Collection", value: "Genesis" },
-              { type: "Style", value: "Abstract" },
-              { type: "Color", value: "Multi" },
+              { type: "Background", value: "Blue" },
+              { type: "Character", value: "Robot" },
               { type: "Size", value: "Medium" }
             ]
           });
@@ -72,90 +50,44 @@ const NFTDetail = () => {
     fetchNFTData();
   }, [id, enqueueSnackbar]);
 
-  // Handle Minting
-  const handleMint = async () => {
+  // Thay thế Handle Minting bằng chức năng tạo đấu giá
+  const handleCreateAuction = async () => {
     if (!account) {
       enqueueSnackbar("Please connect your wallet first", { variant: "warning" });
       return;
     }
 
-    try {
-      setMinting(true);
-      const web3 = await initWeb3();
-      const { nftContract } = await getContracts(web3);
-
-      // Giả sử nft.price là giá của NFT
-      const price = web3.utils.toWei(String(nft.price * quantity), "ether");
-      
-      await nftContract.methods
-        .mint(id, quantity)
-        .send({ from: account, value: price });
-
-      enqueueSnackbar("NFT minted successfully", { variant: "success" });
-    } catch (error) {
-      console.error("Minting error:", error);
-      enqueueSnackbar(
-        `Failed to mint: ${error.message || "Transaction failed"}`,
-        { variant: "error" }
-      );
-    } finally {
-      setMinting(false);
-    }
+    navigate(`/create-auction?tokenId=${id}`);
   };
 
   return (
     <div className="p-6">
       <NFTHeader nft={nft} loading={loading} />
       
-      {/* Thêm phần chọn số lượng và Mint NFT */}
+      {/* Thêm nút tạo đấu giá thay vì mint NFT */}
       {account && nft && (
         <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', my: 3 }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-            <Typography variant="body1" sx={{ mr: 2 }}>Quantity:</Typography>
-            <IconButton onClick={handleDecrease} size="small" sx={{ border: '1px solid #e0e0e0' }}>
-              <RemoveIcon />
-            </IconButton>
-            <Typography variant="body1" sx={{ mx: 2, minWidth: '30px', textAlign: 'center' }}>
-              {quantity}
-            </Typography>
-            <IconButton onClick={handleIncrease} size="small" sx={{ border: '1px solid #e0e0e0' }}>
-              <AddIcon />
-            </IconButton>
-          </Box>
-          
-          <Typography variant="h6" sx={{ mb: 2 }}>
-            Total: {(nft.price * quantity).toFixed(3)} ETH
-          </Typography>
-          
           <Button 
             variant="contained" 
-            color="primary" 
-            onClick={handleMint}
-            disabled={minting}
-            sx={{ px: 4, py: 1, borderRadius: 2, minWidth: '200px' }}
+            color="primary"
+            size="large"
+            onClick={handleCreateAuction}
+            disabled={auctionLoading}
+            sx={{ 
+              minWidth: 200,
+              py: 1.5,
+              fontSize: '1.1rem',
+              borderRadius: '8px',
+              boxShadow: '0 4px 10px rgba(0, 0, 0, 0.15)'
+            }}
           >
-            {minting ? <CircularProgress size={24} /> : 'Mint NFT'}
+            {auctionLoading ? <CircularProgress size={24} /> : 'Create Auction'}
           </Button>
         </Box>
       )}
 
-      <Box className="tabs-container">
-        <Tabs value={value} onChange={handleChange} centered>
-          <Tab label="Overview" className="custom-tab" />
-          <Tab label="Items" className="custom-tab" />
-          <Tab label="Offers" className="custom-tab" />
-          <Tab label="Analytics" className="custom-tab" />
-          <Tab label="Activity" className="custom-tab" />
-        </Tabs>
-      </Box>
-
-      <div className="custom-tab-panel">
-        {value === 0 && <Overview nftData={nft} />}
-        {value === 1 && <div>Items list will be displayed here...</div>}
-        {value === 2 && <div>Offers content here...</div>}
-        {value === 3 && <div>Analytics data here...</div>}
-        {value === 4 && <div>Activity logs here...</div>}
-      </div>
+      {/* Các phần hiển thị khác của NFT */}
+      {/* ...existing code... */}
     </div>
   );
 };

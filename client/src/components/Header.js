@@ -1,12 +1,50 @@
-import React, { useContext, useState } from 'react';
-import { AppBar, Toolbar, Typography, Button, Box, Menu, MenuItem } from '@mui/material';
-import { Link, useNavigate } from 'react-router-dom';
+import React, { useState, useContext } from 'react';
+import { useNavigate } from 'react-router-dom';
+import {
+    AppBar,
+    Box,
+    Toolbar,
+    IconButton,
+    Typography,
+    Menu,
+    Container,
+    Avatar,
+    Button,
+    Tooltip,
+    MenuItem,
+    useMediaQuery,
+    useTheme,
+    Drawer,
+    List,
+    ListItem,
+    ListItemText,
+    ListItemIcon,
+    Divider
+} from '@mui/material';
 import { styled } from '@mui/material/styles';
-import '../css/styles.css';
+import MenuIcon from '@mui/icons-material/Menu';
+import AccountCircleIcon from '@mui/icons-material/AccountCircle';
 import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
+import { Link } from 'react-router-dom';
 import { AccountContext } from '../context/AccountContext';
+import { formatAddress } from '../utils';
+import HomeIcon from '@mui/icons-material/Home';
+import ExploreIcon from '@mui/icons-material/Explore';
+import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
 
-// Styled components
+const pages = [
+    { name: 'Home', path: '/' },
+    { name: 'Auctions', path: '/auctions' },
+    { name: 'Create Auction', path: '/create-auction' },
+];
+
+const userSettings = [
+    { name: 'My Auctions', path: '/my-auctions' },
+    { name: 'My Bids', path: '/my-bids' },
+    { name: 'My NFTs', path: '/my-nfts' },
+    { name: 'Profile', path: '/profile' },
+];
+
 const StyledAppBar = styled(AppBar)(({ theme }) => ({
   background: 'rgba(255, 255, 255, 0.95)',
   backdropFilter: 'blur(8px)',
@@ -111,26 +149,11 @@ const Header = () => {
           <StyledButton color="inherit" component={Link} to="/auctions">
             Explore
           </StyledButton>
-          <StyledButton color="inherit" component={Link} to="/mint"
-            sx={{
-              border: '1px solid rgba(255, 255, 255, 0.2)',
-              '&:hover': {
-                border: '1px solid rgba(255, 255, 255, 0.5)',
-              }
-            }}>
-            Mint NFT
-          </StyledButton>
           <StyledButton
             color="inherit"
             component={Link}
-            to="/my-auctions">
-            My Auctions
-          </StyledButton>
-          <StyledButton
-            color="inherit"
-            component={Link}
-            to="/create">
-            Create (Admin)
+            to="/create-auction">
+            Create Auction
           </StyledButton>
           {account ? (
             <>
@@ -153,6 +176,31 @@ const Header = () => {
                   }
                 }}
               >
+                <MenuItem 
+                  component={Link} 
+                  to="/my-auctions"
+                  onClick={handleClose}
+                  sx={{ py: 1.5 }}
+                >
+                  My Auctions
+                </MenuItem>
+                <MenuItem 
+                  component={Link} 
+                  to="/my-bids"
+                  onClick={handleClose}
+                  sx={{ py: 1.5 }}
+                >
+                  My Bids  
+                </MenuItem>
+                <MenuItem 
+                  component={Link} 
+                  to="/my-nfts"
+                  onClick={handleClose}
+                  sx={{ py: 1.5 }}
+                >
+                  My NFTs
+                </MenuItem>
+                <Divider />
                 <MenuItem
                   onClick={handleDisconnect}
                   sx={{

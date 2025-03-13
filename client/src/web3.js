@@ -2,7 +2,6 @@ import Web3 from 'web3';
 import NFTAuction from './contracts/NFTAuction.json';
 import NFTMinting from './contracts/NFTMinting.json';
 
-
 export const initWeb3 = async () => {
   if (window.ethereum) {
     const web3 = new Web3(window.ethereum);
@@ -24,6 +23,7 @@ export const getContracts = async (web3) => {
     NFTAuction.networks[networkId].address
   );
 
+  // Vẫn giữ lại NFTMinting contract để sử dụng cho đấu giá
   const nftMinting = new web3.eth.Contract(
     NFTMinting.abi, 
     NFTMinting.networks[networkId].address
