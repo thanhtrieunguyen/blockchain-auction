@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Container, Box } from '@mui/material';
+import { Container, Box, CircularProgress, Alert } from '@mui/material';
 import { Swiper, SwiperSlide } from 'swiper/react';
 import "swiper/css";
 import "swiper/css/pagination";
@@ -10,7 +10,7 @@ import Tab from "@mui/material/Tab";
 import { Autoplay, Pagination, Navigation } from "swiper/modules";
 import AuctionList from '../components/AuctionList';
 import "../css/Auctions.css";
-import { initWeb3, getContracts } from '../web3';
+import { initWeb3, getContracts, getAllAuctions } from '../web3';
 
 const dummyAuctions = [
   {
@@ -33,60 +33,6 @@ const dummyAuctions = [
   },
   {
     id: 3,
-    title: "Meebit #7890",
-    description: "Meebit NFT",
-    imageUrl: "https://i.seadn.io/s/raw/files/5d86dafbc10d03c6589d5d920ada4379.jpg",
-    currentPrice: "1.5",
-    endTime: "Ended",
-    status: "ended"
-  },
-  {
-    id: 4,
-    title: "Crypto Punk #1234",
-    description: "Rare Crypto Punk NFT",
-    imageUrl: "https://i.seadn.io/s/raw/files/e7718d18d665f88ca4630cdb63aef37a.png?auto=format&dpr=1&h=500",
-    currentPrice: "2.5",
-    endTime: "2h 45m",
-    status: "live"
-  },
-  {
-    id: 5,
-    title: "Bored Ape #4567",
-    description: "Bored Ape Yacht Club NFT",
-    imageUrl: "https://i.seadn.io/s/raw/files/b0766b15573c9c2958008cb5dc31e39d.gif?auto=format&dpr=1&w=400",
-    currentPrice: "3.5",
-    endTime: "1d 5h",
-    status: "live"
-  },
-  {
-    id: 6,
-    title: "Meebit #7890",
-    description: "Meebit NFT",
-    imageUrl: "https://i.seadn.io/s/raw/files/63f784206e6ae31d6e2b521907ee2ea9.gif?auto=format&dpr=1&w=400",
-    currentPrice: "1.5",
-    endTime: "Ended",
-    status: "ended"
-  },
-  {
-    id: 7,
-    title: "Crypto Punk #1234",
-    description: "Rare Crypto Punk NFT",
-    imageUrl: "https://i.seadn.io/s/raw/files/83b044366d327dd0a4c882c52088154d.gif?auto=format&dpr=1&w=400",
-    currentPrice: "2.5",
-    endTime: "2h 45m",
-    status: "live"
-  },
-  {
-    id: 8,
-    title: "Bored Ape #4567",
-    description: "Bored Ape Yacht Club NFT",
-    imageUrl: "https://i.seadn.io/s/raw/files/5d86dafbc10d03c6589d5d920ada4379.jpg",
-    currentPrice: "3.5",
-    endTime: "1d 5h",
-    status: "live"
-  },
-  {
-    id: 9,
     title: "Meebit #7890",
     description: "Meebit NFT",
     imageUrl: "https://i.seadn.io/s/raw/files/5d86dafbc10d03c6589d5d920ada4379.jpg",
@@ -120,36 +66,99 @@ const banners = [
 const Auctions = () => {
   const [auctions, setAuctions] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [tabIndex, setTabIndex] = useState(0);
 
   useEffect(() => {
     const fetchAuctions = async () => {
       try {
+        setLoading(true);
+        setError(null);
         const web3 = await initWeb3();
-        const { nftAuction } = await getContracts(web3);
+        const { nftAuction, nftMinting } = await getContracts(web3);
         
-        const auctionCount = await nftAuction.methods.getAuctionsCount().call();
-        const allAuctions = [];
+        const allAuctionsData = await getAllAuctions(web3, nftAuction, nftMinting);
+        
+        // Format the data for display
+        const formattedAuctions = allAuctionsData.map(auction => {
+          const currentTime = Date.now();
+          const endTime = parseInt(auction.endTime) * 1000;
+          const hasEnded = currentTime > endTime || auction.ended;
 
-        for(let i = 1; i <= auctionCount; i++) {
-          const auctionData = await nftAuction.methods.auctions(i).call();
-          const nftData = await nftAuction.methods.getNFTDetails(i).call();
+          // Format ETH values correctly
+          let currentPrice = '0';
+          let startPrice = '0';
           
-          allAuctions.push({
-            id: i,
-            title: nftData.name,
-            description: nftData.description,
-            imageUrl: nftData.image,
-            currentPrice: web3.utils.fromWei(auctionData.highestBid),
-            endTime: new Date(auctionData.endTime * 1000).toLocaleString(),
-            status: Date.now() < auctionData.endTime * 1000 ? 'live' : 'ended'
-          });
-        }
+          try {
+            // Function to format ETH values correctly
+            const formatEthValue = (weiValue) => {
+              if (!weiValue || weiValue === '0') return '0';
+              
+              // Convert wei to ETH without rounding small values
+              const ethValue = web3.utils.fromWei(weiValue.toString(), 'ether');
+              
+              // Parse the value as a float
+              const num = parseFloat(ethValue);
+              
+              // For very small values like 0.0001, we want to preserve exact representation
+              // without trailing zeros
+              if (num < 0.001) {
+                // Convert to string and remove trailing zeros
+                return num.toString();
+              }
+              
+              // For regular values, format with appropriate decimals (no trailing zeros)
+              return num.toString();
+            };
+            
+            // Apply formatting to prices
+            if (auction.highestBid && auction.highestBid !== '0') {
+              currentPrice = formatEthValue(auction.highestBid);
+            } else if (auction.startPrice) {
+              currentPrice = formatEthValue(auction.startPrice);
+            }
+            
+            if (auction.startPrice) {
+              startPrice = formatEthValue(auction.startPrice);
+              console.log(`Auction ${auction.id} start price: ${auction.startPrice} Wei -> ${startPrice} ETH`);
+            }
+          } catch (err) {
+            console.warn(`Error converting price for auction ${auction.id}:`, err);
+          }
 
-        setAuctions(allAuctions);
-        setLoading(false);
+          // Format creator address for display
+          const creatorAddress = auction.creator || '';
+          const formattedCreator = creatorAddress 
+            ? `${creatorAddress.substring(0, 6)}...${creatorAddress.substring(creatorAddress.length - 4)}` 
+            : '';
+
+          return {
+            id: auction.id,
+            title: auction.metadata?.name || `NFT #${auction.tokenId}`,
+            description: auction.metadata?.description || 'No description available',
+            imageUrl: auction.metadata?.image || 'https://via.placeholder.com/300?text=No+Image',
+            currentPrice: currentPrice,
+            startPrice: startPrice,
+            endTime: endTime,
+            status: hasEnded ? "ended" : "live",
+            highestBidder: auction.highestBidder,
+            creator: auction.creator,
+            creatorFormatted: formattedCreator, // Add formatted creator address
+            tokenId: auction.tokenId,
+            ended: auction.ended,
+            // Include the raw values for debugging
+            rawStartPrice: auction.startPrice?.toString() || '0',
+            rawHighestBid: auction.highestBid?.toString() || '0',
+            attributes: auction.metadata?.attributes || []
+          };
+        });
+        
+        console.log("Formatted auctions:", formattedAuctions);
+        setAuctions(formattedAuctions);
       } catch (error) {
         console.error("Error fetching auctions:", error);
+        setError("Failed to load auctions. Please try again later.");
+      } finally {
         setLoading(false);
       }
     };
@@ -157,14 +166,10 @@ const Auctions = () => {
     fetchAuctions();
   }, []);
 
-  useEffect(() => {
-    setLoading(false);
-  }, []);
-
   const filteredAuctions =
     tabIndex === 0
-      ? dummyAuctions.filter((auction) => auction.status === "live")
-      : dummyAuctions.filter((auction) => auction.status === "ended");
+      ? auctions.filter((auction) => auction.status === "live")
+      : auctions.filter((auction) => auction.status === "ended");
 
   return (
     <>
@@ -225,7 +230,13 @@ const Auctions = () => {
           </Typography> */}
 
           {loading ? (
-            <Box sx={{ textAlign: 'center', py: 4 }}>Loading...</Box>
+            <Box sx={{ textAlign: 'center', py: 4 }}>
+              <CircularProgress />
+            </Box>
+          ) : error ? (
+            <Box sx={{ textAlign: 'center', py: 4 }}>
+              <Alert severity="error">{error}</Alert>
+            </Box>
           ) : (
             <AuctionList auctions={filteredAuctions} />
           )}
