@@ -12,59 +12,9 @@ import AuctionList from '../components/AuctionList';
 import "../css/Auctions.css";
 import { initWeb3, getContracts, getAllAuctions } from '../web3';
 
-const dummyAuctions = [
-  {
-    id: 1,
-    title: "Crypto Punk #1234",
-    description: "Rare Crypto Punk NFT",
-    imageUrl: "https://i.seadn.io/s/raw/files/e60c8a0354030238be1ebfa59a530c23.png?auto=format&dpr=1&w=384",
-    currentPrice: "2.5",
-    endTime: "2h 45m",
-    status: "live"
-  },
-  {
-    id: 2,
-    title: "Bored Ape #4567",
-    description: "Bored Ape Yacht Club NFT",
-    imageUrl: "https://i.seadn.io/s/raw/files/5d86dafbc10d03c6589d5d920ada4379.jpg",
-    currentPrice: "3.5",
-    endTime: "1d 5h",
-    status: "live"
-  },
-  {
-    id: 3,
-    title: "Meebit #7890",
-    description: "Meebit NFT",
-    imageUrl: "https://i.seadn.io/s/raw/files/5d86dafbc10d03c6589d5d920ada4379.jpg",
-    currentPrice: "1.5",
-    endTime: "Ended",
-    status: "ended"
-  }
-
-  // Add more dummy auctions...
-];
-
-const banners = [
-  {
-    name: "CryptoPunk #7804",
-    author: "0x1234...5678",
-    price: "Starting at 10 ETH",
-    image_background:
-      "https://i.seadn.io/s/primary-drops/0xa09bfff67fcd0b2c3ef238e5fb36f4666c81fea0/34314199:about:media:c98543de-e2c3-4913-bddf-31d3ce42bffb.png?auto=format&dpr=1&w=1920",
-    image: "https://i.seadn.io/s/raw/files/288ec0a6ad66be1bc71f03cb88e01c88.png?auto=format&dpr=1&w=256",
-  },
-  {
-    name: "Bored Ape #1234",
-    author: "0x9876...4321",
-    price: "Starting at 15 ETH",
-    image_background:
-      "https://i.seadn.io/s/primary-drops/0xd30114cf4de14f8ee7b2b38466932bc3f6792385/34379055:about:media:b4e1514c-c411-417f-834e-6e872e36a305.jpeg?auto=format&dpr=1&w=1920",
-    image: "https://i.seadn.io/s/raw/files/d1dddb1d9b43e091a56c52d9210f7609.png?auto=format&dpr=1&w=1920",
-  },
-];
-
 const Auctions = () => {
   const [auctions, setAuctions] = useState([]);
+  const [featuredAuctions, setFeaturedAuctions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [tabIndex, setTabIndex] = useState(0);
@@ -135,7 +85,7 @@ const Auctions = () => {
           return {
             id: auction.id,
             title: auction.metadata?.name || `NFT #${auction.tokenId}`,
-            description: auction.metadata?.description || 'No description available',
+            description: auction.metadata?.description || 'Không có mô tả',
             imageUrl: auction.metadata?.image || 'https://via.placeholder.com/300?text=No+Image',
             currentPrice: currentPrice,
             startPrice: startPrice,
@@ -149,15 +99,28 @@ const Auctions = () => {
             // Include the raw values for debugging
             rawStartPrice: auction.startPrice?.toString() || '0',
             rawHighestBid: auction.highestBid?.toString() || '0',
-            attributes: auction.metadata?.attributes || []
+            attributes: auction.metadata?.attributes || [],
+            // Add these fields for the banner
+            image_background: auction.metadata?.image || 'https://via.placeholder.com/1920x400?text=No+Background',
+            image: auction.metadata?.image || 'https://via.placeholder.com/300?text=No+Image'
           };
         });
         
         console.log("Formatted auctions:", formattedAuctions);
         setAuctions(formattedAuctions);
+        
+        // Select featured auctions for the banner (active auctions with highest bids)
+        const liveAuctions = formattedAuctions.filter(auction => auction.status === "live");
+        
+        // Sort by current price (highest first) and take up to 5 for the banner
+        const featured = liveAuctions
+          .sort((a, b) => parseFloat(b.currentPrice) - parseFloat(a.currentPrice))
+          .slice(0, 5);
+          
+        setFeaturedAuctions(featured.length > 0 ? featured : liveAuctions.slice(0, 5));
       } catch (error) {
         console.error("Error fetching auctions:", error);
-        setError("Failed to load auctions. Please try again later.");
+        setError("Không thể tải phiên đấu giá. Vui lòng thử lại sau.");
       } finally {
         setLoading(false);
       }
@@ -174,23 +137,29 @@ const Auctions = () => {
   return (
     <>
       <Box sx={{ width: '100%', overflow: 'hidden' }}>
-        <Swiper
-          spaceBetween={30}
-          centeredSlides={true}
-          autoplay={{ delay: 5000, disableOnInteraction: false }}
-          loop={true}
-          pagination={{ clickable: true }}
-          navigation={true}
-          modules={[Autoplay, Pagination, Navigation]}
-          className="banner-slider"
-          style={{ width: '100vw' }}
-        >
-          {banners.map((banner, index) => (
-            <SwiperSlide key={index}>
-              <Banner banner={banner} />
-            </SwiperSlide>
-          ))}
-        </Swiper>
+        {loading ? (
+          <Box sx={{ height: 400, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <CircularProgress />
+          </Box>
+        ) : featuredAuctions.length > 0 ? (
+          <Swiper
+            spaceBetween={30}
+            centeredSlides={true}
+            autoplay={{ delay: 5000, disableOnInteraction: false }}
+            loop={featuredAuctions.length > 1}
+            pagination={{ clickable: true }}
+            navigation={featuredAuctions.length > 1}
+            modules={[Autoplay, Pagination, Navigation]}
+            className="banner-slider"
+            style={{ width: '100vw' }}
+          >
+            {featuredAuctions.map((auction) => (
+              <SwiperSlide key={auction.id}>
+                <Banner auction={auction} />
+              </SwiperSlide>
+            ))}
+          </Swiper>
+        ) : null}
 
         <Box sx={{
           width: '100%',
@@ -209,26 +178,14 @@ const Auctions = () => {
               }
             }}
           >
-            <Tab label="Live Auctions" />
-            <Tab label="Ended Auctions" />
+            <Tab label="Đấu Giá Đang Diễn Ra" />
+            <Tab label="Đấu Giá Đã Kết Thúc" />
           </Tabs>
         </Box>
       </Box>
 
       <Container maxWidth="xl">
         <Box sx={{ py: 4 }}>
-          {/* <Typography
-            variant="h4"
-            component="h1"
-            sx={{
-              fontWeight: 700,
-              mb: 4,
-              textAlign: 'left'
-            }}
-          >
-            {tabIndex === 0 ? "Live Auctions" : "Ended Auctions"}
-          </Typography> */}
-
           {loading ? (
             <Box sx={{ textAlign: 'center', py: 4 }}>
               <CircularProgress />

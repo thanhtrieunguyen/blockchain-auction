@@ -20,8 +20,6 @@ import {
 import Web3Button from '../components/Web3Button';
 import { initWeb3, getContracts } from '../web3';
 import { useSnackbar } from 'notistack';
-import { formatDistanceToNow } from 'date-fns';
-
 
 const BidAmount = styled(Typography)(({ theme }) => ({
     color: '#2081E2',
@@ -35,6 +33,18 @@ const WalletAddress = styled(Typography)(({ theme }) => ({
         color: theme.palette.text.primary,
         fontWeight: 500,
     }
+}));
+
+const AddressBadge = styled(Box)(({ theme }) => ({
+    display: 'inline-flex',
+    alignItems: 'center',
+    background: 'rgba(32, 129, 226, 0.1)',
+    borderRadius: '8px',
+    padding: '4px 8px',
+    margin: '2px 0',
+    border: '1px solid rgba(32, 129, 226, 0.2)',
+    fontFamily: 'monospace',
+    fontWeight: 500,
 }));
 
 const BidTime = styled(Typography)(({ theme }) => ({
@@ -57,10 +67,10 @@ const resolveImageUrl = (url) => {
     return url;
 };
 
-// Helper function to format wallet addresses
+// Enhanced helper function to format wallet addresses
 const formatAddress = (address) => {
     if (!address) return '';
-    if (address === '0x0000000000000000000000000000000000000000') return 'None';
+    if (address === '0x0000000000000000000000000000000000000000') return 'Không có';
     return `${address.slice(0, 6)}...${address.slice(-4)}`;
 };
 
@@ -91,8 +101,15 @@ const AuctionDetail = () => {
                 const auctionData = await nftAuction.methods.auctions(id).call();
 
                 if (!auctionData || auctionData.creator === '0x0000000000000000000000000000000000000000') {
-                    throw new Error('Auction not found');
+                    throw new Error('Không tìm thấy phiên đấu giá');
                 }
+
+                // Explicitly convert tokenId to string and log it for debugging
+                const tokenIdRaw = auctionData.tokenId;
+                const tokenIdString = String(tokenIdRaw);
+                
+                console.log("Token ID raw:", tokenIdRaw);
+                console.log("Token ID as string:", tokenIdString);
 
                 // Get NFT metadata
                 let metadata = {
@@ -163,14 +180,14 @@ const AuctionDetail = () => {
 
                 try {
                     // Check if the values exist and are valid before converting
-                    if (auctionData.highestBid && auctionData.highestBid !== '0') {
+                    if (auctionData.highestBid && auctionData.highestBid !== '0' && auctionData.highestBid !== undefined) {
                         // Make sure we convert a string representation
-                        highestBid = web3.utils.fromWei(auctionData.highestBid.toString());
+                        highestBid = web3.utils.fromWei(auctionData.highestBid.toString(), 'ether');
                     }
 
-                    if (auctionData.startPrice) {
+                    if (auctionData.startPrice && auctionData.startPrice !== undefined) {
                         // Make sure we convert a string representation
-                        startPrice = web3.utils.fromWei(auctionData.startPrice.toString());
+                        startPrice = web3.utils.fromWei(auctionData.startPrice.toString(), 'ether');
                     }
                 } catch (conversionError) {
                     console.error("Error converting wei to ETH:", conversionError);
@@ -197,8 +214,8 @@ const AuctionDetail = () => {
                     title: metadata.name,
                     description: metadata.description,
                     imageUrl: metadata.image,
-                    collection: metadata.collection || "NFT Collection",
-                    tokenId: auctionData.tokenId,
+                    collection: metadata.collection || "Bộ Sưu Tập NFT",
+                    tokenId: tokenIdString, // Ensure tokenId is a string
                     startPrice: startPrice,
                     currentPrice: parseFloat(highestBid) > 0 ? highestBid : startPrice,
                     highestBidder: auctionData.highestBidder,
@@ -212,22 +229,83 @@ const AuctionDetail = () => {
                     attributes: metadata.attributes || [] // Add attributes to the auction object
                 };
 
-                // Get bid history events from the contract (normally would use events)
-                // This is a placeholder example - in a real implementation, you'd fetch events from the blockchain
-                const mockBidHistory = [];
+                // Debug to verify tokenId is present
+                console.log("Token ID from blockchain:", auctionData.tokenId);
+                console.log("Formatted auction object:", formattedAuction);
 
-                // Always add current highest bid if it exists
-                if (auctionData.highestBidder !== '0x0000000000000000000000000000000000000000') {
-                    mockBidHistory.push({
-                        bidder: auctionData.highestBidder,
-                        amount: highestBid,
-                        time: new Date().toISOString() // Would normally be the timestamp from the event
+                // Get bid history events from the blockchain
+                try {
+                    // Fetch all NewBid events for this auction
+                    const events = await nftAuction.getPastEvents('NewBid', {
+                        filter: { auctionId: id },
+                        fromBlock: 0,
+                        toBlock: 'latest'
                     });
+                    
+                    console.log("Bid events:", events);
+                    
+                    // Process events one by one to avoid Promise.all errors
+                    const bidHistoryEntries = [];
+                    
+                    for (const event of events) {
+                        try {
+                            // Convert BigInt values to regular JavaScript numbers
+                            const blockNumber = typeof event.blockNumber === 'bigint' 
+                                ? Number(event.blockNumber) 
+                                : Number(event.blockNumber);
+                                
+                            // Get the block timestamp
+                            let timestamp;
+                            try {
+                                // Try to get block timestamp directly
+                                const block = await web3.eth.getBlock(blockNumber);
+                                timestamp = block ? Number(block.timestamp) : Math.floor(Date.now() / 1000);
+                            } catch (blockError) {
+                                console.error("Error fetching block timestamp:", blockError);
+                                timestamp = Math.floor(Date.now() / 1000);
+                            }
+                            
+                            // Convert to milliseconds for JavaScript Date
+                            const timeValue = timestamp * 1000;
+                                
+                            // Create the bid entry with safe conversions
+                            bidHistoryEntries.push({
+                                bidder: event.returnValues.bidder,
+                                amount: web3.utils.fromWei(event.returnValues.amount.toString(), 'ether'),
+                                time: new Date(timeValue),
+                                timestamp: timeValue,
+                                blockNumber
+                            });
+                        } catch (eventError) {
+                            console.error("Error processing bid event:", eventError, event);
+                        }
+                    }
+                    
+                    // Sort by timestamp (descending)
+                    bidHistoryEntries.sort((a, b) => b.timestamp - a.timestamp);
+                    
+                    // Update bid history
+                    setBidHistory(bidHistoryEntries);
+                    
+                    console.log("Bid history:", bidHistoryEntries);
+                } catch (eventError) {
+                    console.error("Error fetching bid history events:", eventError);
+                    
+                    // Fallback to just showing the current highest bid
+                    const fallbackBidHistory = [];
+                    if (auctionData.highestBidder !== '0x0000000000000000000000000000000000000000') {
+                        fallbackBidHistory.push({
+                            bidder: auctionData.highestBidder,
+                            amount: highestBid,
+                            time: new Date(),
+                            timestamp: Date.now()
+                        });
+                    }
+                    setBidHistory(fallbackBidHistory);
                 }
 
-                // Set state
+                // Set auction state
                 setAuction(formattedAuction);
-                setBidHistory(mockBidHistory);
 
                 // Calculate time remaining
                 if (!hasEnded) {
@@ -236,7 +314,7 @@ const AuctionDetail = () => {
                 }
             } catch (error) {
                 console.error("Error fetching auction details:", error);
-                setError(error.message || "Failed to load auction details");
+                setError(error.message || "Không thể tải thông tin phiên đấu giá");
             } finally {
                 setLoading(false);
             }
@@ -258,7 +336,7 @@ const AuctionDetail = () => {
 
                 if (remainingMs <= 0) {
                     clearInterval(timer);
-                    setCountdown("Auction ended");
+                    setCountdown("Phiên đấu giá đã kết thúc");
 
                     // Update auction status
                     setAuction(prev => prev ? { ...prev, hasEnded: true, status: "ended" } : prev);
@@ -284,12 +362,12 @@ const AuctionDetail = () => {
 
     const handleBid = async () => {
         if (!account) {
-            enqueueSnackbar("Please connect your wallet first", { variant: "warning" });
+            enqueueSnackbar("Vui lòng kết nối ví của bạn trước", { variant: "warning" });
             return;
         }
 
         if (parseFloat(bidAmount) < parseFloat(minBidAmount)) {
-            enqueueSnackbar(`Bid must be at least ${minBidAmount} ETH`, { variant: "error" });
+            enqueueSnackbar(`Giá đấu phải ít nhất ${minBidAmount} ETH`, { variant: "error" });
             return;
         }
 
@@ -307,16 +385,29 @@ const AuctionDetail = () => {
                 value: bidAmountWei
             });
 
-            enqueueSnackbar("Bid placed successfully!", { variant: "success" });
+            enqueueSnackbar("Đặt giá thành công!", { variant: "success" });
 
             // Refresh auction data
             window.location.reload();
         } catch (error) {
             console.error("Error placing bid:", error);
-            enqueueSnackbar(error.message || "Failed to place bid", { variant: "error" });
+            enqueueSnackbar(error.message || "Không thể đặt giá", { variant: "error" });
         } finally {
             setBidLoading(false);
         }
+    };
+
+    // Create a component for displaying wallet addresses (without copy functionality)
+    const WalletAddressBadge = ({ address }) => {
+        if (!address) return null;
+        
+        return (
+            <AddressBadge>
+                <Typography variant="body2" sx={{ fontFamily: 'monospace', fontWeight: 500 }}>
+                    {formatAddress(address)}
+                </Typography>
+            </AddressBadge>
+        );
     };
 
     if (loading) {
@@ -335,7 +426,7 @@ const AuctionDetail = () => {
                 <Box sx={{ py: 4 }}>
                     <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>
                     <Button onClick={() => navigate('/auctions')} variant="outlined">
-                        Back to Auctions
+                        Quay lại Đấu Giá
                     </Button>
                 </Box>
             </Container>
@@ -346,7 +437,7 @@ const AuctionDetail = () => {
         return (
             <Container maxWidth="xl">
                 <Box sx={{ textAlign: 'center', py: 4 }}>
-                    <Alert severity="warning">Auction not found</Alert>
+                    <Alert severity="warning">Không tìm thấy phiên đấu giá</Alert>
                 </Box>
             </Container>
         );
@@ -394,7 +485,7 @@ const AuctionDetail = () => {
                             <Grid container spacing={2} sx={{ mb: 3 }}>
                                 <Grid item xs={6} md={3}>
                                     <Typography variant="subtitle2" color="text.secondary">
-                                        Collection
+                                        Bộ Sưu Tập
                                     </Typography>
                                     <Typography variant="body1" sx={{ fontWeight: 600 }}>
                                         {auction.collection}
@@ -405,12 +496,12 @@ const AuctionDetail = () => {
                                         Token ID
                                     </Typography>
                                     <Typography variant="body1" sx={{ fontWeight: 600 }}>
-                                        {auction.tokenId}
+                                        {auction.tokenId !== undefined ? auction.tokenId : "Không có"}
                                     </Typography>
                                 </Grid>
                                 <Grid item xs={6} md={3}>
                                     <Typography variant="subtitle2" color="text.secondary">
-                                        Status
+                                        Trạng Thái
                                     </Typography>
                                     <Typography
                                         variant="body1"
@@ -419,19 +510,17 @@ const AuctionDetail = () => {
                                             color: auction.status === 'active' ? 'success.main' : 'text.secondary'
                                         }}
                                     >
-                                        {auction.status === 'active' ? 'Live' : 'Ended'}
+                                        {auction.status === 'active' ? 'Đang Diễn Ra' : 'Đã Kết Thúc'}
                                     </Typography>
                                 </Grid>
                                 <Grid item xs={6} md={3}>
                                     <Typography variant="subtitle2" color="text.secondary">
-                                        Creator
+                                        Người Tạo
                                     </Typography>
-                                    <Typography variant="body1" sx={{ fontWeight: 600 }}>
-                                        {formatAddress(auction.creator)}
-                                    </Typography>
+                                    <WalletAddressBadge address={auction.creator} />
                                 </Grid>
                             </Grid>
-
+                            
                             {/* <Typography variant="body1" sx={{ mb: 3 }}>
                                 {auction.description || 'No description available for this NFT.'}
                             </Typography> */}
@@ -440,7 +529,7 @@ const AuctionDetail = () => {
                             {auction.attributes && auction.attributes.length > 0 && (
                                 <Box sx={{ mb: 3 }}>
                                     <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>
-                                        Attributes
+                                        Thuộc Tính
                                     </Typography>
                                     <Grid container spacing={1}>
                                         {auction.attributes.map((attr, index) => (
@@ -463,7 +552,7 @@ const AuctionDetail = () => {
                                                         color="text.secondary"
                                                         sx={{ textTransform: 'uppercase', fontWeight: 500, mb: 0.5 }}
                                                     >
-                                                        {attr.trait_type || 'Trait'}
+                                                        {attr.trait_type || 'Đặc Điểm'}
                                                     </Typography>
                                                     <Typography
                                                         variant="body2"
@@ -475,7 +564,7 @@ const AuctionDetail = () => {
                                                     </Typography>
                                                     {attr.rarity && (
                                                         <Typography variant="caption" color="text.secondary">
-                                                            Rarity: {attr.rarity}
+                                                            Độ Hiếm: {attr.rarity}
                                                         </Typography>
                                                     )}
                                                 </Paper>
@@ -487,7 +576,7 @@ const AuctionDetail = () => {
 
                             <Box sx={{ mt: 3 }}>
                                 <Typography variant="subtitle2" color="text.secondary">
-                                    Contract Address
+                                    Địa Chỉ Hợp Đồng
                                 </Typography>
                                 <Typography
                                     variant="body2"
@@ -511,13 +600,13 @@ const AuctionDetail = () => {
                             <>
                                 <Paper elevation={2} sx={{ p: 3, borderRadius: 2, mb: 3 }}>
                                     <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>
-                                        Current Price
+                                        Giá Hiện Tại
                                     </Typography>
                                     <Typography variant="h4" sx={{ mb: 3, fontWeight: 700 }}>
                                         {auction.currentPrice} ETH
                                     </Typography>
                                     <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>
-                                        {auction.status === 'active' ? 'Time Remaining' : 'Auction Ended On'}
+                                        {auction.status === 'active' ? 'Thời Gian Còn Lại' : 'Phiên Đấu Giá Kết Thúc Vào'}
                                     </Typography>
                                     <Typography variant="h6" sx={{ mb: 3, color: auction.status === 'active' ? '#2081E2' : 'text.secondary' }}>
                                         {auction.status === 'active' ? countdown : new Date(auction.endTime).toLocaleString()}
@@ -527,12 +616,12 @@ const AuctionDetail = () => {
                                         <Box sx={{ mb: 3 }}>
                                             <TextField
                                                 fullWidth
-                                                label="Your bid amount (ETH)"
+                                                label="Số tiền đấu giá của bạn (ETH)"
                                                 variant="outlined"
                                                 type="number"
                                                 value={bidAmount}
                                                 onChange={(e) => setBidAmount(e.target.value)}
-                                                helperText={`Minimum bid: ${minBidAmount} ETH`}
+                                                helperText={`Giá đấu tối thiểu: ${minBidAmount} ETH`}
                                                 InputProps={{
                                                     inputProps: { min: minBidAmount, step: "0.01" }
                                                 }}
@@ -543,12 +632,12 @@ const AuctionDetail = () => {
                                                 onClick={handleBid}
                                                 disabled={bidLoading || account.toLowerCase() === auction.creator.toLowerCase()}
                                             >
-                                                {bidLoading ? 'Placing Bid...' : 'Place Bid'}
+                                                {bidLoading ? 'Đang Đặt Giá...' : 'Đặt Giá'}
                                             </Web3Button>
 
                                             {account.toLowerCase() === auction.creator.toLowerCase() && (
                                                 <Typography color="error" variant="body2" sx={{ mt: 1, textAlign: 'center' }}>
-                                                    You cannot bid on your own auction
+                                                    Bạn không thể đấu giá trong phiên đấu giá của chính mình
                                                 </Typography>
                                             )}
                                         </Box>
@@ -556,23 +645,23 @@ const AuctionDetail = () => {
 
                                     {auction.status !== 'active' && (
                                         <Alert severity="info" sx={{ mb: 2 }}>
-                                            This auction has ended and is no longer accepting bids
+                                            Phiên đấu giá này đã kết thúc và không còn nhận đặt giá
                                         </Alert>
                                     )}
 
                                     {auction.highestBidder !== '0x0000000000000000000000000000000000000000' && (
                                         <Box sx={{ mt: 3, p: 2, bgcolor: 'rgba(0,0,0,0.02)', borderRadius: 1 }}>
                                             <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-                                                Highest Bidder
+                                                Người Đặt Giá Cao Nhất
                                             </Typography>
-                                            <Typography variant="body1">
-                                                {formatAddress(auction.highestBidder)}
-                                                {auction.highestBidder.toLowerCase() === account.toLowerCase() && (
+                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                                <WalletAddressBadge address={auction.highestBidder} />
+                                                {account && auction.highestBidder && auction.highestBidder.toLowerCase() === account.toLowerCase() && (
                                                     <Typography component="span" sx={{ ml: 1, color: 'primary.main', fontWeight: 500 }}>
-                                                        (You)
+                                                        (Bạn)
                                                     </Typography>
                                                 )}
-                                            </Typography>
+                                            </Box>
                                         </Box>
                                     )}
                                 </Paper>
@@ -595,13 +684,13 @@ const AuctionDetail = () => {
                                 }}
                             >
                                 <Typography variant="h6" sx={{ mb: 2, color: 'text.secondary' }}>
-                                    Connect your wallet to place bids
+                                    Kết nối ví của bạn để đặt giá
                                 </Typography>
                                 <Web3Button
                                     onClick={() => navigate('/connect-wallet')}
                                     sx={{ maxWidth: 250 }}
                                 >
-                                    Connect Wallet
+                                    Kết Nối Ví
                                 </Web3Button>
                             </Paper>
                         )}
@@ -613,7 +702,7 @@ const AuctionDetail = () => {
                                 borderBottom: '1px solid rgba(0, 0, 0, 0.1)',
                                 pb: 1
                             }}>
-                                Bidding History
+                                Lịch Sử Đấu Giá
                             </Typography>
 
                             {bidHistory.length > 0 ? (
@@ -651,14 +740,19 @@ const AuctionDetail = () => {
                                                 </Box>
 
                                                 <WalletAddress variant="body2">
-                                                    by <span className="highlight">
-                                                        {formatAddress(bid.bidder)}
-                                                        {bid.bidder.toLowerCase() === account?.toLowerCase() && ' (You)'}
-                                                    </span>
+                                                    bởi <WalletAddressBadge address={bid.bidder || ''} />
+                                                    {bid.bidder && account && bid.bidder.toLowerCase() === account.toLowerCase() ? ' (Bạn)' : ''}
                                                 </WalletAddress>
 
                                                 <BidTime>
-                                                    {new Date(bid.time).toLocaleString()}
+                                                    {bid.time ? bid.time.toLocaleString(undefined, {
+                                                        year: 'numeric',
+                                                        month: 'short',
+                                                        day: 'numeric',
+                                                        hour: '2-digit',
+                                                        minute: '2-digit',
+                                                        second: '2-digit'
+                                                    }) : 'Thời gian không xác định'}
                                                 </BidTime>
                                             </ListItem>
                                             {index < bidHistory.length - 1 && (
@@ -672,7 +766,7 @@ const AuctionDetail = () => {
                                 </List>
                             ) : (
                                 <Typography variant="body2" color="text.secondary" sx={{ py: 2, textAlign: 'center' }}>
-                                    No bids have been placed on this auction yet.
+                                    Chưa có lượt đấu giá nào cho phiên đấu giá này.
                                 </Typography>
                             )}
                         </Paper>

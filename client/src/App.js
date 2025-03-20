@@ -8,43 +8,76 @@ import ConnectWallet from './pages/ConnectWallet';
 import AuctionDetail from './pages/AuctionDetail';
 import MyAuctions from './pages/MyAuctions';
 import CreateAuction from './pages/CreateAuction';
+import MyBids from './pages/MyBids';
+import RefundHistory from './pages/RefundHistory';
+import MyNFTs from './pages/MyNFTs'; // Import the MyNFTs page
 import UnauthenticatedRoute from './components/UnauthenticatedRoute';
 import { AccountProvider } from './context/AccountContext';
+import { Web3Provider } from './contexts/Web3Context';
 import { Snackbar, Alert } from '@mui/material';
 import { useState, useEffect } from 'react';
 import { SnackbarProvider } from 'notistack';
 import SnackbarContent from './components/SnackbarContentWrapper';
 import "./css/Toast.css";
-import NewCollection from './components/NewCollection';
-import NFTDetail from './pages/NFTDetail';
+import VerifierManagement from './components/verification/VerifierManagement';
+// Import the new VerificationQueue page instead of the component
+import VerificationQueue from './pages/VerificationQueue';
 
 function LayoutWithHeader() {
   const location = useLocation();
-  const hideHeaderRoutes = ["/connect-wallet"];
-  const shouldShowHeader = !hideHeaderRoutes.includes(location.pathname);
+  const [snackbarOpen, setSnackbarOpen] = useState(false);
+  const [snackbarMessage, setSnackbarMessage] = useState('');
 
-  const containerStyle =
-    location.pathname === "/create"
-      ? { flex: 1, height: "100vh" }
-      : { flex: 1, minHeight: "calc(180vh - 64px - 400px)" };
+  useEffect(() => {
+    if (location.state && location.state.message) {
+      setSnackbarMessage(location.state.message);
+      setSnackbarOpen(true);
+    }
+  }, [location]);
+
+  const handleCloseSnackbar = () => {
+    setSnackbarOpen(false);
+  };
 
   return (
     <>
-      <div className="App" style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
-        {shouldShowHeader && <Header />}
-        <div style={containerStyle}> {/* 64px là Header height, 400px là Footer height */}
+      <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+        <Header />
+        <div style={{ flex: 1 }}>
           <Routes>
             <Route path="/" element={<Home />} />
             <Route path="/auctions" element={<Auctions />} />
-            <Route path="/auctions/:id" element={<AuctionDetail />} />
+            <Route path="/auction/:id" element={<AuctionDetail />} />
             <Route path="/my-auctions" element={<MyAuctions />} />
+            <Route path="/my-nfts" element={<MyNFTs />} /> {/* Add MyNFTs route */}
             <Route path="/create-auction" element={<CreateAuction />} />
-            <Route path="/new-collection" element={<NewCollection />} />
-            <Route path="/mint/:id" element={<NFTDetail />} />
+            <Route path="/my-bids" element={<MyBids />} />
+            <Route path="/refund-history" element={<RefundHistory />} />
+            <Route path="/verifier-management" element={<VerifierManagement />} />
+            <Route path="/verification-queue" element={<VerificationQueue />} />
+            <Route
+              path="/connect-wallet"
+              element={
+                <UnauthenticatedRoute>
+                  <ConnectWallet />
+                </UnauthenticatedRoute>
+              }
+            />
           </Routes>
         </div>
         <Footer />
       </div>
+
+      <Snackbar
+        open={snackbarOpen}
+        autoHideDuration={6000}
+        onClose={handleCloseSnackbar}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert onClose={handleCloseSnackbar} severity="info" sx={{ width: '100%' }}>
+          {snackbarMessage}
+        </Alert>
+      </Snackbar>
     </>
   );
 }
@@ -86,19 +119,21 @@ function App() {
       }}
     >
       <AccountProvider>
-        <Router>
-          <Routes>
-            <Route
-              path="/connect-wallet"
-              element={
-                <UnauthenticatedRoute>
-                  <ConnectWallet />
-                </UnauthenticatedRoute>
-              }
-            />
-            <Route path="/*" element={<LayoutWithHeader />} />
-          </Routes>
-        </Router>
+        <Web3Provider>
+          <Router>
+            <Routes>
+              <Route
+                path="/connect-wallet"
+                element={
+                  <UnauthenticatedRoute>
+                    <ConnectWallet />
+                  </UnauthenticatedRoute>
+                }
+              />
+              <Route path="/*" element={<LayoutWithHeader />} />
+            </Routes>
+          </Router>
+        </Web3Provider>
       </AccountProvider>
       <Snackbar
         open={snackbar.open}

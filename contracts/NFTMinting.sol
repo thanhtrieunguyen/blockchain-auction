@@ -14,9 +14,9 @@ contract NFTMinting is ERC721, Ownable {
     // Base URI for metadata
     string public baseURI;
 
-    constructor() ERC721("BoredApeYachtClub", "BAYC") {
+    constructor() ERC721("AuctionDemo", "ADEMO") {
         tokenCounter = 0;
-        baseURI = "https://ipfs.io/ipfs/QmeSjSinHpPnmXmspMjwiXyN6zS4E9zccariGR3jxcaWtq/";
+        baseURI = "https://ipfs.io/ipfs/QmUNLLsPACCz1vLxQVkXqqLX5R1X345qqfHbsf67hvA3Nn/";
     }
 
     // Hàm để cài đặt URI cho token

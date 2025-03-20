@@ -1,0 +1,1 @@
+console.log(typeof BigInt); // mong đợi "function"

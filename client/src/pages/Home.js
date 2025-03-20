@@ -1,15 +1,22 @@
-import React from 'react';
-import { Container, Typography, Button, Box, Grid, Paper } from '@mui/material';
-import { styled, useTheme } from '@mui/material/styles';
+import React, { useState, useEffect } from 'react';
+import { 
+  Container, Grid, Box, Typography, Button, 
+  Card, CardContent, CardActionArea, CardMedia,
+  IconButton, useTheme, Paper, CircularProgress, Alert, Chip
+} from '@mui/material';
+import { styled } from '@mui/material/styles';
 import { Link } from 'react-router-dom';
-import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
-import ExploreIcon from '@mui/icons-material/Explore';
-import LocalOfferIcon from '@mui/icons-material/LocalOffer';
-import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
-import { useEffect, useState } from 'react';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
-import { IconButton, Card, CardMedia, CardContent, CardActionArea } from '@mui/material';
+import ExploreIcon from '@mui/icons-material/Explore';
+import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
+import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
+import LocalOfferIcon from '@mui/icons-material/LocalOffer';
+import ExploreOutlinedIcon from '@mui/icons-material/ExploreOutlined';
+import AccessTimeIcon from '@mui/icons-material/AccessTime';
+
+// Import web3 functions for fetching real data
+import { initWeb3, getContracts, getAllAuctions } from '../web3';
 
 const HeroSection = styled(Box)(({ theme }) => ({
   minHeight: '80vh',
@@ -100,28 +107,81 @@ const ScrollSection = styled(Box)(({ theme }) => ({
 const ItemCard = styled(Card)(({ theme }) => ({
   width: 240,
   flexShrink: 0,
-  borderRadius: '16px',
-  transition: 'all 0.3s ease',
+  borderRadius: '12px',
+  overflow: 'hidden',
+  transition: 'transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out',
   '&:hover': {
     transform: 'translateY(-8px)',
     boxShadow: '0 12px 24px rgba(0, 0, 0, 0.15)',
-  }
+  },
+  display: 'flex',
+  flexDirection: 'column',
+  height: '100%'
 }));
 
 const Home = () => {
   const [auctions, setAuctions] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const theme = useTheme();
 
   useEffect(() => {
-    // Giả lập dữ liệu - thay thế bằng API call thực tế
-    setAuctions([
-      { id: 1, title: "Crypto Punk #1", image: "https://i.seadn.io/s/primary-drops/0x2f3f30dda2ee71375a02d30d8521b1cf13281338/34285054:about:preview_media:01b1f678-f9e6-4ad9-9e51-b67c8d1c4125.png?", price: "0.5 ETH" },
-      { id: 2, title: "Bored Ape #123", image: "https://i.seadn.io/s/primary-drops/0x2f3f30dda2ee71375a02d30d8521b1cf13281338/34285054:about:preview_media:01b1f678-f9e6-4ad9-9e51-b67c8d1c4125.png?", price: "2.1 ETH" },
-      { id: 3, title: "Doodle #456", image: "https://i.seadn.io/s/primary-drops/0x2f3f30dda2ee71375a02d30d8521b1cf13281338/34285054:about:preview_media:01b1f678-f9e6-4ad9-9e51-b67c8d1c4125.png?", price: "1.2 ETH" },
-      { id: 4, title: "Azuki #789", image: "https://i.seadn.io/s/primary-drops/0x2f3f30dda2ee71375a02d30d8521b1cf13281338/34285054:about:preview_media:01b1f678-f9e6-4ad9-9e51-b67c8d1c4125.png?", price: "3.0 ETH" },
-      { id: 5, title: "Art Block #234", image: "https://i.seadn.io/s/primary-drops/0x2f3f30dda2ee71375a02d30d8521b1cf13281338/34285054:about:preview_media:01b1f678-f9e6-4ad9-9e51-b67c8d1c4125.png?", price: "0.8 ETH" },
-      { id: 6, title: "NFT World #567", image: "https://i.seadn.io/s/primary-drops/0x2f3f30dda2ee71375a02d30d8521b1cf13281338/34285054:about:preview_media:01b1f678-f9e6-4ad9-9e51-b67c8d1c4125.png?", price: "1.5 ETH" },
-    ]);
+    // Fetch real auction data from blockchain
+    const fetchAuctions = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        
+        const web3 = await initWeb3();
+        if (!web3) {
+          throw new Error('Failed to initialize Web3');
+        }
+        
+        const { nftAuction, nftMinting } = await getContracts(web3);
+        
+        // Get all auctions from the smart contract
+        const allAuctionsData = await getAllAuctions(web3, nftAuction, nftMinting);
+        
+        // Format the data for display and filter only active auctions
+        const liveAuctions = allAuctionsData
+          .filter(auction => {
+            const currentTime = Date.now();
+            const endTime = parseInt(auction.endTime) * 1000;
+            return currentTime < endTime && !auction.ended;
+          })
+          .map(auction => {
+            // Format price correctly
+            let currentPrice = '0';
+            try {
+              if (auction.highestBid && auction.highestBid !== '0') {
+                currentPrice = web3.utils.fromWei(auction.highestBid.toString(), 'ether');
+              } else if (auction.startPrice) {
+                currentPrice = web3.utils.fromWei(auction.startPrice.toString(), 'ether');
+              }
+            } catch (err) {
+              console.warn(`Error converting price for auction ${auction.id}:`, err);
+            }
+            
+            return {
+              id: auction.id,
+              title: auction.metadata?.name || `NFT #${auction.tokenId}`,
+              image: auction.metadata?.image || 'https://via.placeholder.com/300?text=No+Image',
+              price: `${currentPrice} ETH`
+            };
+          });
+          
+        // Take only 6 auctions at most for display
+        setAuctions(liveAuctions.slice(0, 6));
+        
+      } catch (error) {
+        console.error("Error fetching auctions:", error);
+        setError("Failed to load auctions");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchAuctions();
   }, []);
 
   const scroll = (containerId, direction) => {
@@ -149,7 +209,7 @@ const Home = () => {
                     textShadow: '0 2px 4px rgba(0,0,0,0.2)',
                   }}
                 >
-                  Discover & Auction Extraordinary NFTs
+                  Khám Phá & Đấu Giá NFT Độc Đáo
                 </Typography>
                 <Typography
                   variant="h5"
@@ -159,7 +219,7 @@ const Home = () => {
                     textShadow: '0 1px 2px rgba(0,0,0,0.1)',
                   }}
                 >
-                  A blockchain-based platform for auctioning unique digital collectibles with secure refunds
+                  Nền tảng đấu giá bộ sưu tập kỹ thuật số độc đáo với hoàn tiền đảm bảo dựa trên blockchain
                 </Typography>
                 <Box sx={{ display: 'flex', gap: 2 }}>
                   <StyledButton
@@ -171,7 +231,7 @@ const Home = () => {
                       background: 'linear-gradient(45deg, #2196f3 30%, #21cbf3 90%)',
                     }}
                   >
-                    Explore Auctions
+                    Khám Phá Đấu Giá
                   </StyledButton>
                   <StyledButton
                     variant="outlined"
@@ -187,7 +247,7 @@ const Home = () => {
                       }
                     }}
                   >
-                    Create Auction
+                    Tạo Đấu Giá
                   </StyledButton>
                 </Box>
               </Box>
@@ -218,7 +278,7 @@ const Home = () => {
         <Container maxWidth="lg">
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
             <Typography variant="h4" sx={{ fontWeight: 700 }}>
-              Live Auctions
+              Đấu Giá Trực Tiếp
             </Typography>
             <Button
               component={Link}
@@ -226,7 +286,7 @@ const Home = () => {
               variant="outlined"
               endIcon={<ChevronRightIcon />}
             >
-              View All
+              Xem Tất Cả
             </Button>
           </Box>
 
@@ -239,26 +299,98 @@ const Home = () => {
             </IconButton>
 
             <Box id="auctions-container" className="scroll-container">
-              {auctions.map((auction) => (
-                <ItemCard key={auction.id}>
-                  <CardActionArea component={Link} to={`/auction/${auction.id}`}>
-                    <CardMedia
-                      component="img"
-                      height="240"
-                      image={auction.image}
-                      alt={auction.title}
-                    />
-                    <CardContent>
-                      <Typography gutterBottom variant="h6" component="div">
-                        {auction.title}
-                      </Typography>
-                      <Typography variant="subtitle1" color="primary" fontWeight="bold">
-                        {auction.price}
-                      </Typography>
-                    </CardContent>
-                  </CardActionArea>
-                </ItemCard>
-              ))}
+              {loading ? (
+                <Box sx={{ display: 'flex', justifyContent: 'center', width: '100%', p: 4 }}>
+                  <CircularProgress />
+                </Box>
+              ) : error ? (
+                <Box sx={{ width: '100%', p: 2 }}>
+                  <Alert severity="error">{error}</Alert>
+                </Box>
+              ) : auctions.length === 0 ? (
+                <Box sx={{ width: '100%', p: 4, textAlign: 'center' }}>
+                  <Typography variant="h6" color="text.secondary">Không tìm thấy phiên đấu giá nào</Typography>
+                  <Button 
+                    component={Link} 
+                    to="/create-auction" 
+                    variant="contained" 
+                    sx={{ mt: 2 }}
+                    startIcon={<AddCircleOutlineIcon />}
+                  >
+                    Tạo Phiên Đấu Giá
+                  </Button>
+                </Box>
+              ) : (
+                auctions.map((auction) => (
+                  <ItemCard key={auction.id}>
+                    <Box sx={{ position: 'relative' }}>
+                      <CardMedia
+                        component="img"
+                        height="160"
+                        image={auction.image}
+                        alt={auction.title}
+                        onError={(e) => {
+                          e.target.onerror = null;
+                          e.target.src = 'https://via.placeholder.com/300?text=No+Image';
+                        }}
+                      />
+                      {/* Status Badge */}
+                      <Box sx={{ position: 'absolute', top: 8, right: 8 }}>
+                        <Chip 
+                          label="Live" 
+                          size="small"
+                          color="success"
+                          sx={{ fontWeight: 'bold', fontSize: '0.7rem' }}
+                        />
+                      </Box>
+                    </Box>
+                    <CardActionArea 
+                      component={Link} 
+                      to={`/auctions/${auction.id}`}
+                      sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', alignItems: 'stretch', justifyContent: 'flex-start' }}
+                    >
+                      <CardContent sx={{ p: 2, pb: 2, flexGrow: 1 }}>
+                        <Typography gutterBottom variant="h6" component="div" sx={{
+                          fontWeight: 600,
+                          fontSize: '1rem',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          display: '-webkit-box',
+                          WebkitLineClamp: 1,
+                          WebkitBoxOrient: 'vertical'
+                        }}>
+                          {auction.title}
+                        </Typography>
+                        <Box sx={{ 
+                          display: 'flex', 
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          mt: 1
+                        }}>
+                          <Typography variant="body2" color="text.secondary">
+                            <LocalOfferIcon sx={{ mr: 0.5, fontSize: '0.9rem', verticalAlign: 'middle' }} />
+                            Giá hiện tại:
+                          </Typography>
+                          <Typography variant="body1" color="primary.main" fontWeight="bold">
+                            {auction.price}
+                          </Typography>
+                        </Box>
+                        <Box sx={{ 
+                          display: 'flex', 
+                          alignItems: 'center',
+                          mt: 1,
+                          color: 'success.main'
+                        }}>
+                          <AccessTimeIcon sx={{ mr: 0.5, fontSize: '0.9rem', verticalAlign: 'middle' }} />
+                          <Typography variant="body2" fontSize="0.8rem">
+                            Đang diễn ra
+                          </Typography>
+                        </Box>
+                      </CardContent>
+                    </CardActionArea>
+                  </ItemCard>
+                ))
+              )}
             </Box>
 
             <IconButton
@@ -280,7 +412,7 @@ const Home = () => {
                   100+
                 </Typography>
                 <Typography variant="h6">
-                  Active Auctions
+                  Phiên Đấu Giá Hoạt Động
                 </Typography>
               </StatCard>
             </Grid>
@@ -290,7 +422,7 @@ const Home = () => {
                   50+
                 </Typography>
                 <Typography variant="h6">
-                  NFT Collections
+                  Bộ Sưu Tập NFT
                 </Typography>
               </StatCard>
             </Grid>
@@ -300,7 +432,7 @@ const Home = () => {
                   500+
                 </Typography>
                 <Typography variant="h6">
-                  Community Members
+                  Thành Viên Cộng Đồng
                 </Typography>
               </StatCard>
             </Grid>
@@ -318,25 +450,25 @@ const Home = () => {
               color: 'transparent',
             }}
           >
-            Why Choose Us?
+            Tại Sao Chọn Chúng Tôi?
           </Typography>
 
           <Grid container spacing={4}>
             {[
               {
                 icon: <AccountBalanceWalletIcon sx={{ fontSize: 40, color: '#2196f3' }} />,
-                title: 'Secure Transactions',
-                description: 'Complete your NFT transactions securely using Ethereum blockchain technology'
+                title: 'Giao Dịch An Toàn',
+                description: 'Hoàn thành các giao dịch NFT một cách an toàn sử dụng công nghệ blockchain Ethereum'
               },
               {
                 icon: <LocalOfferIcon sx={{ fontSize: 40, color: '#2196f3' }} />,
-                title: 'Transparent Bidding',
-                description: 'Participate in transparent NFT auctions with real-time updates and secure bidding'
+                title: 'Đấu Giá Minh Bạch',
+                description: 'Tham gia đấu giá NFT minh bạch với cập nhật theo thời gian thực và đảm bảo an toàn'
               },
               {
                 icon: <ExploreIcon sx={{ fontSize: 40, color: '#2196f3' }} />,
-                title: 'Reliable Refunds',
-                description: 'Our smart contracts ensure automatic refunds when outbid or when auctions are cancelled'
+                title: 'Hoàn Tiền Đáng Tin Cậy',
+                description: 'Hợp đồng thông minh của chúng tôi đảm bảo hoàn tiền tự động khi bị đấu giá cao hơn hoặc khi phiên đấu giá bị hủy'
               }
             ].map((feature, index) => (
               <Grid item xs={12} md={4} key={index}>

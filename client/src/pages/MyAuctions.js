@@ -302,16 +302,38 @@ const MyAuctions = () => {
     <Container maxWidth="lg" sx={{ mt: 4, mb: 8 }}>
       <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <Typography variant="h4" component="h1" fontWeight="600">
-          My Auctions
+          Các phiên đấu giá của tôi
         </Typography>
-        <Button 
-          variant="outlined" 
-          startIcon={<RefreshIcon />}
-          onClick={fetchMyAuctions} 
-          disabled={loading}
-        >
-          Refresh
-        </Button>
+        <Box sx={{ display: 'flex', gap: 2 }}>
+          <Button 
+            variant="contained"
+            onClick={() => navigate('/create-auction')}
+            sx={{ 
+              textTransform: 'none',
+              fontWeight: 600,
+              borderRadius: '8px',
+            }}
+          >
+            Create New Auction
+          </Button>
+          <Button 
+            variant="outlined" 
+            startIcon={<RefreshIcon />}
+            onClick={fetchMyAuctions} 
+            disabled={loading}
+            sx={{ 
+              borderRadius: '8px',
+              textTransform: 'none',
+              fontWeight: 500,
+              borderWidth: '1.5px',
+              '&:hover': {
+                borderWidth: '1.5px',
+              }
+            }}
+          >
+            Refresh
+          </Button>
+        </Box>
       </Box>
       
       {error && (
@@ -359,16 +381,22 @@ const MyAuctions = () => {
                 height: '100%', 
                 display: 'flex', 
                 flexDirection: 'column',
-                borderRadius: 2,
+                borderRadius: '12px',
                 overflow: 'hidden',
                 boxShadow: 2,
-                transition: 'all 0.3s ease-in-out',
+                transition: 'transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out',
                 '&:hover': {
-                  transform: 'translateY(-4px)',
-                  boxShadow: 4
+                  transform: 'translateY(-5px)',
+                  boxShadow: '0 10px 20px rgba(0,0,0,0.2)'
                 }
               }}>
-                <Box sx={{ position: 'relative' }}>
+                <Box 
+                  sx={{ 
+                    position: 'relative',
+                    cursor: 'pointer' 
+                  }}
+                  onClick={() => navigate(`/auctions/${auction.id}`)}
+                >
                   <CardMedia
                     component="img"
                     height="200"
@@ -413,7 +441,14 @@ const MyAuctions = () => {
                   )}
                 </Box>
                 
-                <CardContent sx={{ flexGrow: 1, p: 2 }}>
+                <CardContent 
+                  sx={{ 
+                    flexGrow: 1, 
+                    p: 2,
+                    cursor: 'pointer'
+                  }}
+                  onClick={() => navigate(`/auctions/${auction.id}`)}
+                >
                   {/* NFT Name */}
                   <Typography 
                     variant="h6" 
@@ -430,7 +465,7 @@ const MyAuctions = () => {
                   
                   <Divider sx={{ mb: 2 }} />
                   
-                  {/* Price info - Fixed DOM nesting */}
+                  {/* Price info */}
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
                     <Box display="flex" alignItems="center">
                       <LocalOfferIcon fontSize="small" sx={{ color: 'text.secondary', mr: 1 }} />
@@ -460,7 +495,7 @@ const MyAuctions = () => {
                     </Typography>
                   </Box>
                   
-                  {/* Bid status - Fixed DOM nesting */}
+                  {/* Bid status */}
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
                     <Box display="flex" alignItems="center">
                       <GavelIcon fontSize="small" sx={{ color: 'text.secondary', mr: 1 }} />
@@ -488,22 +523,12 @@ const MyAuctions = () => {
                       )}
                     </Box>
                   </Box>
-                  
+                </CardContent>
+                
+                {/* Action buttons in a separate container that isn't clickable */}
+                <Box sx={{ p: 2, pt: 0, bgcolor: 'background.paper' }}>
                   {/* Action buttons */}
-                  <Box sx={{ mt: 'auto', display: 'flex', gap: 1 }}>
-                    <Button 
-                      variant="outlined" 
-                      size="small"
-                      fullWidth
-                      onClick={() => navigate(`/auctions/${auction.id}`)}
-                      sx={{ 
-                        borderRadius: '4px',
-                        textTransform: 'none'
-                      }}
-                    >
-                      View Details
-                    </Button>
-                    
+                  <Box sx={{ display: 'flex', gap: 1 }}>
                     {!auction.ended && auction.endTime < Date.now() && (
                       <Button 
                         variant="contained" 
@@ -512,8 +537,9 @@ const MyAuctions = () => {
                         fullWidth
                         onClick={() => handleFinalizeAuction(auction.id)}
                         sx={{ 
-                          borderRadius: '4px',
-                          textTransform: 'none'
+                          borderRadius: '8px',
+                          textTransform: 'none',
+                          fontWeight: 600
                         }}
                       >
                         Finalize
@@ -528,36 +554,21 @@ const MyAuctions = () => {
                         fullWidth
                         onClick={() => handleCancelAuction(auction.id)}
                         sx={{ 
-                          borderRadius: '4px',
-                          textTransform: 'none'
+                          borderRadius: '8px',
+                          textTransform: 'none',
+                          fontWeight: 600
                         }}
                       >
                         Cancel
                       </Button>
                     )}
                   </Box>
-                </CardContent>
+                </Box>
               </Card>
             </Grid>
           ))}
         </Grid>
       )}
-      
-      <Box sx={{ mt: 6, textAlign: 'center' }}>
-        <Button 
-          variant="contained"
-          onClick={() => navigate('/create-auction')}
-          sx={{ 
-            px: 4,
-            py: 1,
-            borderRadius: '4px',
-            textTransform: 'none',
-            fontWeight: 600
-          }}
-        >
-          Create New Auction
-        </Button>
-      </Box>
     </Container>
   );
 }

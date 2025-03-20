@@ -50,10 +50,10 @@ const Footer = () => {
         <Grid container spacing={4}>
           <Grid item xs={12} md={4}>
             <Typography variant="h6" color="text.primary" gutterBottom>
-              About NFT Auction
+              Giới Thiệu Đấu Giá NFT
             </Typography>
             <Typography variant="body2" mb={2}>
-              Discover, collect, and sell extraordinary NFTs on the world's first & largest NFT marketplace
+              Khám phá, sưu tầm và bán các NFT độc đáo trên sàn giao dịch NFT lớn nhất và đầu tiên trên thế giới
             </Typography>
             <Stack direction="row" spacing={1}>
               <SocialButton aria-label="twitter">
@@ -76,49 +76,49 @@ const Footer = () => {
 
           <Grid item xs={12} md={2}>
             <Typography variant="h6" color="text.primary" gutterBottom>
-              Marketplace
+              Thị Trường
             </Typography>
             <Stack spacing={2}>
-              <FooterLink component={RouterLink} to="/auctions">All NFTs</FooterLink>
-              <FooterLink component={RouterLink} to="/art">Art</FooterLink>
-              <FooterLink component={RouterLink} to="/collectibles">Collectibles</FooterLink>
-              <FooterLink component={RouterLink} to="/photography">Photography</FooterLink>
+              <FooterLink component={RouterLink} to="/auctions">Tất Cả NFT</FooterLink>
+              <FooterLink component={RouterLink} to="/art">Nghệ Thuật</FooterLink>
+              <FooterLink component={RouterLink} to="/collectibles">Bộ Sưu Tập</FooterLink>
+              <FooterLink component={RouterLink} to="/photography">Nhiếp Ảnh</FooterLink>
             </Stack>
           </Grid>
 
           <Grid item xs={12} md={2}>
             <Typography variant="h6" color="text.primary" gutterBottom>
-              Resources
+              Tài Nguyên
             </Typography>
             <Stack spacing={2}>
-              <FooterLink component={RouterLink} to="/help">Help Center</FooterLink>
-              <FooterLink component={RouterLink} to="/partners">Partners</FooterLink>
-              <FooterLink component={RouterLink} to="/suggestions">Suggestions</FooterLink>
+              <FooterLink component={RouterLink} to="/help">Trung Tâm Trợ Giúp</FooterLink>
+              <FooterLink component={RouterLink} to="/partners">Đối Tác</FooterLink>
+              <FooterLink component={RouterLink} to="/suggestions">Đề Xuất</FooterLink>
               <FooterLink component={RouterLink} to="/blog">Blog</FooterLink>
             </Stack>
           </Grid>
 
           <Grid item xs={12} md={2}>
             <Typography variant="h6" color="text.primary" gutterBottom>
-              Company
+              Công Ty
             </Typography>
             <Stack spacing={2}>
-              <FooterLink component={RouterLink} to="/about">About</FooterLink>
-              <FooterLink component={RouterLink} to="/careers">Careers</FooterLink>
-              <FooterLink component={RouterLink} to="/contact">Contact</FooterLink>
-              <FooterLink component={RouterLink} to="/privacy">Privacy Policy</FooterLink>
+              <FooterLink component={RouterLink} to="/about">Giới Thiệu</FooterLink>
+              <FooterLink component={RouterLink} to="/careers">Tuyển Dụng</FooterLink>
+              <FooterLink component={RouterLink} to="/contact">Liên Hệ</FooterLink>
+              <FooterLink component={RouterLink} to="/privacy">Chính Sách Bảo Mật</FooterLink>
             </Stack>
           </Grid>
 
           <Grid item xs={12} md={2}>
             <Typography variant="h6" color="text.primary" gutterBottom>
-              Support
+              Hỗ Trợ
             </Typography>
             <Stack spacing={2}>
-              <FooterLink href="mailto:support@nftauction.com">Contact Support</FooterLink>
-              <FooterLink component={RouterLink} to="/faq">FAQ</FooterLink>
-              <FooterLink component={RouterLink} to="/docs">Documentation</FooterLink>
-              <FooterLink component={RouterLink} to="/status">System Status</FooterLink>
+              <FooterLink href="mailto:support@nftauction.com">Liên Hệ Hỗ Trợ</FooterLink>
+              <FooterLink component={RouterLink} to="/faq">Câu Hỏi Thường Gặp</FooterLink>
+              <FooterLink component={RouterLink} to="/docs">Tài Liệu</FooterLink>
+              <FooterLink component={RouterLink} to="/status">Trạng Thái Hệ Thống</FooterLink>
             </Stack>
           </Grid>
         </Grid>
@@ -127,12 +127,12 @@ const Footer = () => {
 
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <Typography variant="body2">
-            © {new Date().getFullYear()} NFT Auction. All rights reserved.
+            © {new Date().getFullYear()} Đấu Giá NFT. Đã đăng ký bản quyền.
           </Typography>
           <Stack direction="row" spacing={3}>
-            <FooterLink component={RouterLink} to="/terms">Terms</FooterLink>
-            <FooterLink component={RouterLink} to="/privacy">Privacy</FooterLink>
-            <FooterLink component={RouterLink} to="/security">Security</FooterLink>
+            <FooterLink component={RouterLink} to="/terms">Điều Khoản</FooterLink>
+            <FooterLink component={RouterLink} to="/privacy">Quyền Riêng Tư</FooterLink>
+            <FooterLink component={RouterLink} to="/security">Bảo Mật</FooterLink>
           </Stack>
         </Box>
       </Container>

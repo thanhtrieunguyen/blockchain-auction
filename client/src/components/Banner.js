@@ -3,60 +3,74 @@ import { Container, Typography, Button } from "@mui/material";
 import { Link } from "react-router-dom";
 import "../css/Banner.css";
 
-const Banner = ({ banner }) => {
+// Updated Banner component to work with auction data
+const Banner = ({ auction }) => {
   const [timeLeft, setTimeLeft] = useState({
-    days: 1,
+    days: 0,
     hours: 0,
     minutes: 0,
-    seconds: 18,
+    seconds: 0,
   });
 
   useEffect(() => {
+    // Calculate time remaining based on auction end time
+    const calculateTimeRemaining = () => {
+      const now = new Date().getTime();
+      const endTime = auction.endTime;
+      const timeRemaining = Math.max(0, endTime - now);
+      
+      // Convert to days, hours, minutes, seconds
+      const days = Math.floor(timeRemaining / (1000 * 60 * 60 * 24));
+      const hours = Math.floor((timeRemaining % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+      const minutes = Math.floor((timeRemaining % (1000 * 60 * 60)) / (1000 * 60));
+      const seconds = Math.floor((timeRemaining % (1000 * 60)) / 1000);
+      
+      return { days, hours, minutes, seconds };
+    };
+
+    // Initial calculation
+    setTimeLeft(calculateTimeRemaining());
+    
+    // Update countdown every second
     const timer = setInterval(() => {
-      setTimeLeft((prev) => {
-        let { days, hours, minutes, seconds } = prev;
-
-        if (seconds > 0) {
-          seconds -= 1;
-        } else if (minutes > 0) {
-          minutes -= 1;
-          seconds = 59;
-        } else if (hours > 0) {
-          hours -= 1;
-          minutes = 59;
-          seconds = 59;
-        } else if (days > 0) {
-          days -= 1;
-          hours = 23;
-          minutes = 59;
-          seconds = 59;
-        }
-
-        return { days, hours, minutes, seconds };
-      });
+      setTimeLeft(calculateTimeRemaining());
     }, 1000);
 
     return () => clearInterval(timer);
-  }, []);
+  }, [auction.endTime]);
+
+  // Get the highest bidder display name (shortened address)
+  const highestBidder = auction.highestBidder && 
+    auction.highestBidder !== '0x0000000000000000000000000000000000000000' ? 
+    `${auction.highestBidder.substring(0, 6)}...${auction.highestBidder.substring(auction.highestBidder.length - 4)}` : 
+    'No bids yet';
+
+  // Determine if there are active bids
+  const hasBids = auction.highestBidder && 
+    auction.highestBidder !== '0x0000000000000000000000000000000000000000';
 
   return (
-    <div className="banner" style={{ backgroundImage: `url(${banner.image_background})` }}>
+    <div className="banner" style={{ backgroundImage: `url(${auction.image_background})` }}>
       <div className="banner-overlay">
         <Container maxWidth="lg" className="banner-content">
-          {/* image góc trái */}
+          {/* NFT image */}
           <div className="image-container">
-            <img src={banner.image} alt="" className="banner-image" />
+            <img src={auction.imageUrl} alt={auction.title} className="banner-image" />
           </div>
 
           <div className="text-container">
             <Typography variant="h3" component="h1" className="banner-title">
-              {banner.name}
+              {auction.title}
             </Typography>
             <Typography variant="h6" component="p" className="banner-author">
-              Current Bid by <span className="author-name">{banner.author}</span>
+              {hasBids ? (
+                <>Current Bid by <span className="author-name">{highestBidder}</span></>
+              ) : (
+                <>Created by <span className="author-name">{auction.creatorFormatted}</span></>
+              )}
             </Typography>
             <Typography variant="body1" className="banner-price">
-              Starting Price: {banner.price}
+              {hasBids ? `Current Price: ${auction.currentPrice} ETH` : `Starting Price: ${auction.startPrice} ETH`}
             </Typography>
 
             <div className="countdown">
@@ -79,7 +93,7 @@ const Banner = ({ banner }) => {
                 variant="contained"
                 className="view-drop-btn"
                 component={Link}
-                to="/NFTDetail"
+                to={`/auctions/${auction.id}`}
               >
                 Place Bid
               </Button>

@@ -1,233 +1,285 @@
 import React, { useState, useContext } from 'react';
-import { useNavigate } from 'react-router-dom';
-import {
-    AppBar,
-    Box,
-    Toolbar,
-    IconButton,
-    Typography,
-    Menu,
-    Container,
-    Avatar,
-    Button,
-    Tooltip,
-    MenuItem,
-    useMediaQuery,
-    useTheme,
-    Drawer,
-    List,
-    ListItem,
-    ListItemText,
-    ListItemIcon,
-    Divider
-} from '@mui/material';
+import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import { styled } from '@mui/material/styles';
+import {
+  AppBar,
+  Box,
+  Toolbar,
+  Typography,
+  Button,
+  IconButton,
+  Menu,
+  MenuItem,
+  Tooltip,
+  Avatar,
+  Divider,
+  Badge,
+} from '@mui/material';
 import MenuIcon from '@mui/icons-material/Menu';
 import AccountCircleIcon from '@mui/icons-material/AccountCircle';
-import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
-import { Link } from 'react-router-dom';
+import GavelIcon from '@mui/icons-material/Gavel';
+import VerifiedIcon from '@mui/icons-material/Verified';
 import { AccountContext } from '../context/AccountContext';
-import { formatAddress } from '../utils';
-import HomeIcon from '@mui/icons-material/Home';
-import ExploreIcon from '@mui/icons-material/Explore';
-import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
-
-const pages = [
-    { name: 'Home', path: '/' },
-    { name: 'Auctions', path: '/auctions' },
-    { name: 'Create Auction', path: '/create-auction' },
-];
-
-const userSettings = [
-    { name: 'My Auctions', path: '/my-auctions' },
-    { name: 'My Bids', path: '/my-bids' },
-    { name: 'My NFTs', path: '/my-nfts' },
-    { name: 'Profile', path: '/profile' },
-];
+import { truncateAddress } from '../utils/addressUtils';
 
 const StyledAppBar = styled(AppBar)(({ theme }) => ({
-  background: 'rgba(255, 255, 255, 0.95)',
-  backdropFilter: 'blur(8px)',
-  borderBottom: '1px solid rgba(0, 0, 0, 0.1)',
-  boxShadow: '0 4px 30px rgba(0, 0, 0, 0.05)',
+  backgroundColor: theme.palette.primary.main,
 }));
 
-const StyledButton = styled(Button)(({ theme }) => ({
-  margin: '0 8px',
-  padding: '8px 16px',
-  borderRadius: '12px',
-  textTransform: 'none',
-  fontSize: '1rem',
-  fontWeight: 500,
-  color: '#04111d',
-  transition: 'all 0.3s ease',
-  '&:hover': {
-    background: 'rgba(0, 0, 0, 0.05)',
-    transform: 'translateY(-2px)',
-  },
-}));
+const navLinks = [
+  { name: 'Home', path: '/' },
+  { name: 'Auctions', path: '/auctions' },
+  { name: 'My Auctions', path: '/my-auctions', auth: true },
+  { name: 'My NFTs', path: '/my-nfts', auth: true }, // Add this line
+  { name: 'My Bids', path: '/my-bids', auth: true },
+  { name: 'Create Auction', path: '/create-auction', auth: true }
+];
 
-const LogoText = styled(Typography)(({ theme }) => ({
-  fontWeight: 700,
-  background: 'linear-gradient(45deg, #2081e2, #0066ff)',
-  backgroundClip: 'text',
-  WebkitBackgroundClip: 'text',
-  color: 'transparent',
-  fontSize: '1.8rem',
-}));
-
-const ConnectButton = styled(Button)(({ theme }) => ({
-  margin: '0 8px',
-  padding: '8px 24px',
-  borderRadius: '12px',
-  textTransform: 'none',
-  fontSize: '1rem',
-  fontWeight: 600,
-  background: '#2081e2',
-  color: 'white',
-  transition: 'all 0.3s ease',
-  '&:hover': {
-    background: '#1868b7',
-    transform: 'translateY(-2px)',
-    boxShadow: '0 4px 20px rgba(32, 129, 226, 0.3)',
-  },
-}));
-
-const WalletButton = styled(Button)(({ theme }) => ({
-  margin: '0 8px',
-  padding: '8px 16px',
-  borderRadius: '12px',
-  textTransform: 'none',
-  fontSize: '0.95rem',
-  fontWeight: 600,
-  background: 'rgba(32, 129, 226, 0.1)',
-  color: '#2081e2',
-  border: '2px solid rgba(32, 129, 226, 0.1)',
-  transition: 'all 0.2s ease',
-  display: 'flex',
-  alignItems: 'center',
-  gap: '8px',
-  '&:hover': {
-    background: 'rgba(32, 129, 226, 0.15)',
-    border: '2px solid #2081e2',
-    transform: 'translateY(-2px)',
-  },
-}));
+// Admin/Verifier nav links that are only shown to users with proper permissions
+const adminLinks = [
+  { name: 'Manage Verifiers', path: '/verifier-management', admin: true },
+  { name: 'Verification Queue', path: '/verification-queue', verifier: true }
+];
 
 const Header = () => {
   const navigate = useNavigate();
-  const { account, disconnectWallet } = useContext(AccountContext);
-  const [anchorEl, setAnchorEl] = useState(null);
+  const { account, isConnected, isAdmin, isVerifier } = useContext(AccountContext);
+  const [anchorElNav, setAnchorElNav] = useState(null);
+  const [anchorElUser, setAnchorElUser] = useState(null);
+  const [anchorElVerification, setAnchorElVerification] = useState(null);
 
-  const handleClick = (event) => {
-    setAnchorEl(event.currentTarget);
+  const handleOpenNavMenu = (event) => {
+    setAnchorElNav(event.currentTarget);
   };
 
-  const handleClose = () => {
-    setAnchorEl(null);
+  const handleCloseNavMenu = () => {
+    setAnchorElNav(null);
   };
 
-  const handleDisconnect = () => {
-    disconnectWallet();
-    handleClose();
+  const handleOpenUserMenu = (event) => {
+    setAnchorElUser(event.currentTarget);
   };
 
-  const shortenAddress = (address) => {
-    return `${address.slice(0, 6)}...${address.slice(-4)}`;
+  const handleCloseUserMenu = () => {
+    setAnchorElUser(null);
+  };
+
+  const handleOpenVerificationMenu = (event) => {
+    setAnchorElVerification(event.currentTarget);
+  };
+
+  const handleCloseVerificationMenu = () => {
+    setAnchorElVerification(null);
+  };
+
+  const navigateTo = (path) => {
+    navigate(path);
+    handleCloseNavMenu();
+    handleCloseUserMenu();
+    handleCloseVerificationMenu();
   };
 
   return (
-    <StyledAppBar position="fixed">
-      <Toolbar sx={{ padding: '12px 24px' }}>
-        <LogoText variant="h6" style={{ flexGrow: 1 }}>
+    <StyledAppBar position="static">
+      <Toolbar>
+        <IconButton
+          size="large"
+          edge="start"
+          color="inherit"
+          aria-label="menu"
+          sx={{ mr: 2, display: { xs: 'flex', md: 'none' } }}
+          onClick={handleOpenNavMenu}
+        >
+          <MenuIcon />
+        </IconButton>
+
+        <Typography
+          variant="h6"
+          component={RouterLink}
+          to="/"
+          sx={{
+            mr: 2,
+            fontWeight: 700,
+            color: 'white',
+            textDecoration: 'none',
+          }}
+        >
           NFT Auction
-        </LogoText>
-        <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
-          <StyledButton color="inherit" component={Link} to="/">
-            Home
-          </StyledButton>
-          <StyledButton color="inherit" component={Link} to="/auctions">
-            Explore
-          </StyledButton>
-          <StyledButton
-            color="inherit"
-            component={Link}
-            to="/create-auction">
-            Create Auction
-          </StyledButton>
-          {account ? (
+        </Typography>
+
+        <Box sx={{ flexGrow: 1, display: { xs: 'none', md: 'flex' } }}>
+          <Button
+            onClick={() => navigateTo('/auctions')}
+            sx={{ my: 2, color: 'white', display: 'block' }}
+          >
+            Phiên đấu giá
+          </Button>
+          {isConnected && (
             <>
-              <WalletButton
-                onClick={handleClick}
-                startIcon={<AccountBalanceWalletIcon />}
+              <Button
+                onClick={() => navigateTo('/my-auctions')}
+                sx={{ my: 2, color: 'white', display: 'block' }}
               >
-                {shortenAddress(account)}
-              </WalletButton>
-              <Menu
-                anchorEl={anchorEl}
-                open={Boolean(anchorEl)}
-                onClose={handleClose}
-                PaperProps={{
-                  sx: {
-                    mt: 1,
-                    borderRadius: '12px',
-                    minWidth: '200px',
-                    boxShadow: '0 4px 20px rgba(0, 0, 0, 0.1)',
-                  }
-                }}
+                Đấu giá của tôi
+              </Button>
+              <Button
+                onClick={() => navigateTo('/create-auction')}
+                sx={{ my: 2, color: 'white', display: 'block' }}
               >
-                <MenuItem 
-                  component={Link} 
-                  to="/my-auctions"
-                  onClick={handleClose}
-                  sx={{ py: 1.5 }}
-                >
-                  My Auctions
-                </MenuItem>
-                <MenuItem 
-                  component={Link} 
-                  to="/my-bids"
-                  onClick={handleClose}
-                  sx={{ py: 1.5 }}
-                >
-                  My Bids  
-                </MenuItem>
-                <MenuItem 
-                  component={Link} 
-                  to="/my-nfts"
-                  onClick={handleClose}
-                  sx={{ py: 1.5 }}
-                >
-                  My NFTs
-                </MenuItem>
-                <Divider />
-                <MenuItem
-                  onClick={handleDisconnect}
-                  sx={{
-                    fontSize: '0.95rem',
-                    fontWeight: 500,
-                    color: '#FF3B30',
-                    py: 1.5,
-                    '&:hover': {
-                      background: 'rgba(255, 59, 48, 0.1)',
-                    }
-                  }}
-                >
-                  Disconnect Wallet
-                </MenuItem>
-              </Menu>
+                Tạo đấu giá
+              </Button>
+              <Button
+                onClick={() => navigateTo('/my-bids')}
+                sx={{ my: 2, color: 'white', display: 'block' }}
+              >
+                Lịch sử đấu giá
+              </Button>
             </>
-          ) : (
-            <ConnectButton
-              startIcon={<AccountBalanceWalletIcon />}
-              onClick={() => {
-                navigate('/connect-wallet');
-              }}
-            >
-              Connect Wallet
-            </ConnectButton>
           )}
         </Box>
+
+        {isConnected && (isAdmin || isVerifier) && (
+          <Tooltip title="Quản lý xác thực">
+            <IconButton 
+              color="inherit" 
+              onClick={handleOpenVerificationMenu}
+              sx={{ mr: 1 }}
+            >
+              <Badge color="secondary">
+                <VerifiedIcon />
+              </Badge>
+            </IconButton>
+          </Tooltip>
+        )}
+
+        {isConnected ? (
+          <Box sx={{ flexGrow: 0 }}>
+            <Tooltip title="Tài khoản">
+              <IconButton onClick={handleOpenUserMenu} sx={{ p: 0 }}>
+                <Avatar alt="User Avatar">
+                  <AccountCircleIcon />
+                </Avatar>
+              </IconButton>
+            </Tooltip>
+            <Menu
+              sx={{ mt: '45px' }}
+              id="menu-appbar"
+              anchorEl={anchorElUser}
+              anchorOrigin={{
+                vertical: 'top',
+                horizontal: 'right',
+              }}
+              keepMounted
+              transformOrigin={{
+                vertical: 'top',
+                horizontal: 'right',
+              }}
+              open={Boolean(anchorElUser)}
+              onClose={handleCloseUserMenu}
+            >
+              <MenuItem disabled>
+                <Typography textAlign="center">
+                  {truncateAddress(account)}
+                </Typography>
+              </MenuItem>
+              <Divider />
+              <MenuItem onClick={() => navigateTo('/my-auctions')}>
+                <Typography textAlign="center">Đấu giá của tôi</Typography>
+              </MenuItem>
+              <MenuItem onClick={() => navigateTo('/my-bids')}>
+                <Typography textAlign="center">Lịch sử đấu giá</Typography>
+              </MenuItem>
+              <MenuItem onClick={() => navigateTo('/create-auction')}>
+                <Typography textAlign="center">Tạo đấu giá</Typography>
+              </MenuItem>
+            </Menu>
+
+            {/* Verification Menu */}
+            <Menu
+              sx={{ mt: '45px' }}
+              id="verification-menu"
+              anchorEl={anchorElVerification}
+              anchorOrigin={{
+                vertical: 'top',
+                horizontal: 'right',
+              }}
+              keepMounted
+              transformOrigin={{
+                vertical: 'top',
+                horizontal: 'right',
+              }}
+              open={Boolean(anchorElVerification)}
+              onClose={handleCloseVerificationMenu}
+            >
+              {isAdmin && (
+                <MenuItem onClick={() => navigateTo('/verifier-management')}>
+                  <Typography textAlign="center">Quản lý người xác thực</Typography>
+                </MenuItem>
+              )}
+              {isVerifier && (
+                <MenuItem onClick={() => navigateTo('/verification-queue')}>
+                  <Typography textAlign="center">Duyệt yêu cầu xác thực</Typography>
+                </MenuItem>
+              )}
+            </Menu>
+          </Box>
+        ) : (
+          <Button
+            variant="contained"
+            color="secondary"
+            onClick={() => navigateTo('/connect-wallet')}
+          >
+            Kết nối ví
+          </Button>
+        )}
+
+        {/* Mobile menu */}
+        <Menu
+          id="menu-appbar-mobile"
+          anchorEl={anchorElNav}
+          anchorOrigin={{
+            vertical: 'bottom',
+            horizontal: 'left',
+          }}
+          keepMounted
+          transformOrigin={{
+            vertical: 'top',
+            horizontal: 'left',
+          }}
+          open={Boolean(anchorElNav)}
+          onClose={handleCloseNavMenu}
+          sx={{
+            display: { xs: 'block', md: 'none' },
+          }}
+        >
+          <MenuItem onClick={() => navigateTo('/auctions')}>
+            <Typography textAlign="center">Phiên đấu giá</Typography>
+          </MenuItem>
+          {isConnected && (
+            <>
+              <MenuItem onClick={() => navigateTo('/my-auctions')}>
+                <Typography textAlign="center">Đấu giá của tôi</Typography>
+              </MenuItem>
+              <MenuItem onClick={() => navigateTo('/create-auction')}>
+                <Typography textAlign="center">Tạo đấu giá</Typography>
+              </MenuItem>
+              <MenuItem onClick={() => navigateTo('/my-bids')}>
+                <Typography textAlign="center">Lịch sử đấu giá</Typography>
+              </MenuItem>
+              {(isAdmin || isVerifier) && <Divider />}
+              {isAdmin && (
+                <MenuItem onClick={() => navigateTo('/verifier-management')}>
+                  <Typography textAlign="center">Quản lý người xác thực</Typography>
+                </MenuItem>
+              )}
+              {isVerifier && (
+                <MenuItem onClick={() => navigateTo('/verification-queue')}>
+                  <Typography textAlign="center">Duyệt yêu cầu xác thực</Typography>
+                </MenuItem>
+              )}
+            </>
+          )}
+        </Menu>
       </Toolbar>
     </StyledAppBar>
   );
