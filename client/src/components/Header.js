@@ -43,11 +43,24 @@ const adminLinks = [
 
 const Header = () => {
   const navigate = useNavigate();
-  const { account, isConnected, isAdmin, isVerifier } = useContext(AccountContext);
+  const { account, isConnected, isAdmin, isVerifier, disconnectWallet} = useContext(AccountContext);
   const [anchorElNav, setAnchorElNav] = useState(null);
   const [anchorElUser, setAnchorElUser] = useState(null);
   const [anchorElVerification, setAnchorElVerification] = useState(null);
+  const [anchorEl, setAnchorEl] = useState(null);
 
+  const handleClick = (event) => {
+    setAnchorEl(event.currentTarget);
+  };
+
+  const handleClose = () => {
+    setAnchorEl(null);
+  };
+
+  const handleDisconnect = () => {
+    disconnectWallet();
+    handleClose();
+  };
   const handleOpenNavMenu = (event) => {
     setAnchorElNav(event.currentTarget);
   };
@@ -192,6 +205,20 @@ const Header = () => {
               <MenuItem onClick={() => navigateTo('/create-auction')}>
                 <Typography textAlign="center">Tạo đấu giá</Typography>
               </MenuItem>
+              <MenuItem
+                  onClick={handleDisconnect}
+                  sx={{
+                    fontSize: '0.95rem',
+                    fontWeight: 500,
+                    color: '#FF3B30',
+                    py: 1.5,
+                    '&:hover': {
+                      background: 'rgba(255, 59, 48, 0.1)',
+                    }
+                  }}
+                >
+                  Ngắt Kết Nối Ví
+                </MenuItem>
             </Menu>
 
             {/* Verification Menu */}

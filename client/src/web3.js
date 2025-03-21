@@ -2,6 +2,7 @@ import Web3 from 'web3';
 import NFTAuction from './contracts/NFTAuction.json';
 import NFTMinting from './contracts/NFTMinting.json';
 import NFTVerifier from './contracts/NFTVerifier.json';
+import ERC721ABI from './abis/erc721ABI.json';
 
 export const initWeb3 = async () => {
   if (window.ethereum) {
@@ -452,21 +453,68 @@ export const getUserNFTs = async (web3, nftContract, userAddress) => {
 export const handleTransactionError = (error) => {
   console.error('Transaction error:', error);
   
-  // Common MetaMask errors with user-friendly messages
-  if (error.code === -32603) {
-    return 'MetaMask internal error. Please try again or restart your browser.';
-  } else if (error.message && error.message.includes('User denied')) {
-    return 'Transaction was rejected in your wallet';
-  } else if (error.message && error.message.includes('gas')) {
-    return 'Gas estimation failed. Network may be congested.';
-  } else if (error.message && error.message.includes('nonce')) {
-    return 'Transaction nonce error. Try resetting your MetaMask account.';
-  } else if (error.message) {
-    // Extract relevant part of the error message
-    return error.message.split('\n')[0].substring(0, 100);
+  // Xử lý lỗi chi tiết từ VM Exception
+  if (error.data && error.data.data) {
+    // Trích xuất thông tin lỗi từ VM Exception
+    const vmData = error.data.data;
+    
+    // Kiểm tra lỗi cụ thể từ VM
+    if (vmData.message === "revert") {
+      // Kiểm tra nếu có reason cụ thể
+      if (vmData.reason) {
+        return `Smart contract từ chối giao dịch: ${vmData.reason}`;
+      }
+      
+      // Trường hợp không có reason cụ thể, trả về thông báo chung hơn
+      return 'Smart contract từ chối giao dịch. Vui lòng kiểm tra quyền truy cập và tính hợp lệ của token.';
+    }
   }
   
-  return 'Failed to complete transaction';
+  // Common MetaMask errors with user-friendly messages
+  if (error.code === -32603) {
+    return 'Lỗi nội bộ JSON-RPC. Kiểm tra xem bạn đã phê duyệt token và có quyền tạo đấu giá hay không.';
+  } else if (error.message && error.message.includes('User denied')) {
+    return 'Giao dịch đã bị từ chối trong ví của bạn';
+  } else if (error.message && error.message.includes('gas')) {
+    return 'Ước tính gas thất bại. Mạng có thể đang bị tắc nghẽn hoặc gas limit quá thấp.';
+  } else if (error.message && error.message.includes('nonce')) {
+    return 'Lỗi nonce giao dịch. Hãy thử đặt lại tài khoản MetaMask của bạn.';
+  } else if (error.message && error.message.includes('insufficient funds')) {
+    return 'Không đủ tiền để thực hiện giao dịch. Vui lòng kiểm tra số dư của bạn.';
+  } else if (error.message && error.message.includes('ERC721: transfer')) {
+    return 'Lỗi chuyển token NFT. Vui lòng kiểm tra quyền sở hữu và phê duyệt token.';
+  } else if (error.message && error.message.includes('ERC721: caller is not')) {
+    return 'Bạn không có quyền thực hiện thao tác này với NFT. Vui lòng kiểm tra quyền sở hữu.';
+  } else if (error.message) {
+    // Trích xuất thông báo lỗi cụ thể nếu có
+    const errorMatch = error.message.match(/reason string: ['"](.+?)['"]/);
+    if (errorMatch && errorMatch[1]) {
+      return `Lỗi smart contract: ${errorMatch[1]}`;
+    }
+    
+    return 'Lỗi: ' + error.message.split('\n')[0];
+  }
+  
+  return 'Lỗi không xác định khi thực hiện giao dịch. Vui lòng thử lại.';
+};
+
+// Thêm hàm mới để kiểm tra điều kiện tiên quyết
+export const checkAuctionPrerequisites = async (web3, nftAddress, tokenId, account) => {
+  try {
+    const nftContract = new web3.eth.Contract(ERC721ABI, nftAddress);
+    
+    // Kiểm tra owner của token
+    const owner = await nftContract.methods.ownerOf(tokenId).call();
+    if (owner.toLowerCase() !== account.toLowerCase()) {
+      throw new Error('Bạn không phải là chủ sở hữu của NFT này');
+    }
+    
+    // Kiểm tra các điều kiện khác nếu cần
+    return true;
+  } catch (error) {
+    console.error("Error checking prerequisites:", error);
+    throw error;
+  }
 };
 
 // Enhanced transaction sender with retry logic and better error handling

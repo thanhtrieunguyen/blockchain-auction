@@ -142,12 +142,20 @@ export const AccountProvider = ({ children }) => {
     }, [contracts.nftVerifier, account, isAdmin]);
 
     useEffect(() => {
+        let isMounted = true;
+        
         const checkConnectedAccount = async () => {
             if (window.ethereum) {
                 try {
-                    const accounts = await window.ethereum.request({ method: 'eth_accounts' });
-                    if (accounts.length > 0) {
-                        setAccount(accounts[0]);
+                    // Kiểm tra xem người dùng đã disconnect chưa
+                    const userDisconnected = localStorage.getItem('userDisconnected') === 'true';
+                    
+                    // Chỉ kiểm tra tài khoản nếu người dùng chưa disconnect
+                    if (!userDisconnected) {
+                        const accounts = await window.ethereum.request({ method: 'eth_accounts' });
+                        if (accounts.length > 0) {
+                            setAccount(accounts[0]);
+                        }
                     }
                 } catch (error) {
                     console.error('Error checking accounts:', error);
@@ -162,11 +170,18 @@ export const AccountProvider = ({ children }) => {
             window.ethereum.on('accountsChanged', (accounts) => {
                 if (accounts.length === 0) {
                     setAccount(null);
+                    localStorage.removeItem('walletAddress');
+                    localStorage.setItem('userDisconnected', 'true');
                 } else {
                     setAccount(accounts[0]);
+                    localStorage.setItem('userDisconnected', 'false');
                 }
             });
         }
+
+        return () => {
+            isMounted = false;
+        };
     }, []);
 
     const connectWallet = async () => {
@@ -178,6 +193,7 @@ export const AccountProvider = ({ children }) => {
                 
                 if (accounts.length > 0) {
                     setAccount(accounts[0]);
+                    localStorage.setItem('userDisconnected', 'false');
                     return true;
                 }
                 return false;
@@ -194,6 +210,8 @@ export const AccountProvider = ({ children }) => {
     const disconnectWallet = () => {
         setAccount(null);
         localStorage.removeItem('walletAddress');
+        // Đánh dấu rằng người dùng đã chủ động ngắt kết nối
+        localStorage.setItem('userDisconnected', 'true');
     };
 
     return (

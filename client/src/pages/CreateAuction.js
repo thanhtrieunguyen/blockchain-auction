@@ -23,13 +23,14 @@ import Web3Button from '../components/Web3Button';
 import { AccountContext } from '../context/AccountContext';
 import { initWeb3, getContracts, executeContractMethod } from '../web3';
 import { useSnackbar } from 'notistack';
+// Import NFTAuction contract
+import NFTAuction from '../contracts/NFTAuction.json';
 import NFTVerifier from '../contracts/NFTVerifier.json';
 import { toSafeString, toSafeNumber, calculateGasLimit, debugBigIntParams } from '../utils/bigIntUtils';
 import erc721ABI from '../abis/erc721ABI.json';
 import { Web3 } from 'web3';
 import BN from 'bn.js';
-// import connectDB from '../utils/db';
-// import Auction from '../models/Auction';
+import NFTValidator from '../components/common/NFTValidator';
 
 const StyledPaper = styled(Paper)(({ theme }) => ({
     padding: theme.spacing(4), // Increased padding from 3 to 4
@@ -95,11 +96,31 @@ const CreateAuction = () => {
     const [nftData, setNftData] = useState(null);
     const [error, setError] = useState('');
     const { enqueueSnackbar } = useSnackbar();
+    const [validationResults, setValidationResults] = useState(null);
+    // Add state for networkId
+    const [networkId, setNetworkId] = useState(null);
 
     // Handler for field blur to mark fields as touched
     const handleBlur = (field) => {
         setTouched(prev => ({ ...prev, [field]: true }));
     };
+
+    // Get network ID on component mount
+    useEffect(() => {
+        const getNetworkId = async () => {
+            try {
+                const web3 = await initWeb3();
+                if (web3) {
+                    const id = await web3.eth.net.getId();
+                    setNetworkId(id);
+                }
+            } catch (error) {
+                console.error("Error getting network ID:", error);
+            }
+        };
+        
+        getNetworkId();
+    }, []);
 
     //    const we await initWeb3(); Hàm này sẽ gọi API để lấy thông tin NFT
     const fetchNFTData = async () => {
@@ -135,7 +156,26 @@ const CreateAuction = () => {
             console.log("Current connected account:", account);
 
             try {
-                const { nftAuction, nftMinting } = await getContracts(web3);
+                const { nftAuction, nftMinting, nftVerifier } = await getContracts(web3);
+
+                // Kiểm tra NFT đã được xác thực chưa
+                try {
+                    const isVerified = await nftVerifier.methods.isNFTVerified(tokenId).call();
+                    console.log("NFT verification status:", isVerified);
+                    
+                    // Thêm dòng này để thông báo khi NFT chưa được xác thực
+                    if (!isVerified) {
+                        console.log("NFT chưa được xác thực");
+                        enqueueSnackbar('NFT này chưa được xác thực. Vui lòng xác thực NFT trước khi đấu giá.', {
+                            variant: 'warning',
+                            autoHideDuration: 5000,
+                        });
+                        // Vẫn tiếp tục load thông tin NFT để user có thể xem
+                    }
+                } catch (verificationError) {
+                    console.warn("Error checking NFT verification status:", verificationError);
+                    // Continue with loading NFT data even if verification check fails
+                }
 
                 if (formData.tokenAddress.toLowerCase() === nftMinting._address.toLowerCase()) {
                     try {
@@ -325,207 +365,353 @@ const CreateAuction = () => {
         }
     };
 
-    const handleSubmit = async (event) => {
-        event.preventDefault();
-        setError('');
-        setLoading(true);
-
-        try {
-            const web3 = await initWeb3();
-            const { nftAuction, nftMinting, nftVerifier } = await getContracts(web3);
-
-            // Validate inputs
-            if (!formData.tokenAddress || !formData.tokenId || !formData.startingPrice || !formData.endDate) {
-                throw new Error('Vui lòng điền đầy đủ thông tin');
-            }
-
-            // Đảm bảo tokenId là string hợp lệ
-            let tokenId;
-            try {
-                const parsedId = parseInt(formData.tokenId, 10);
-                if (isNaN(parsedId) || parsedId < 0 || parsedId.toString() !== formData.tokenId.trim()) {
-                    throw new Error('Token ID phải là số nguyên không âm');
-                }
-                tokenId = formData.tokenId.trim();
-                console.log("Xử lý token ID:", tokenId);
-            } catch (err) {
-                console.error("Invalid token ID format:", err);
-                throw new Error('Token ID không hợp lệ. Vui lòng nhập một số nguyên hợp lệ.');
-            }
-
-            // Lấy instance của NFT contract
-            let nftContract;
-            if (formData.tokenAddress.toLowerCase() === nftMinting._address.toLowerCase()) {
-                nftContract = nftMinting;
-                console.log("Sử dụng contract NFT của chúng ta");
-            } else {
-                nftContract = new web3.eth.Contract(erc721ABI, formData.tokenAddress);
-                console.log("Sử dụng contract NFT bên ngoài:", formData.tokenAddress);
-            }
-
-            // Kiểm tra quyền sở hữu NFT
-            const owner = await nftContract.methods.ownerOf(tokenId).call();
-            console.log("Chủ sở hữu NFT:", owner);
-
-            if (owner.toLowerCase() !== account.toLowerCase()) {
-                throw new Error(`Bạn không sở hữu NFT này. Nó thuộc về ${owner}`);
-            }
-
-            // Kiểm tra NFT đã được xác thực chưa
-            const isVerified = await nftVerifier.methods.isNFTVerified(tokenId).call();
-            console.log("NFT đã được xác thực:", isVerified);
-
-            if (!isVerified) {
-                enqueueSnackbar('NFT này chưa được xác thực. Bạn cần xác thực NFT trước khi đấu giá.', {
-                    variant: 'warning',
-                    autoHideDuration: 5000,
-                });
-                localStorage.setItem('createAuctionFormData', JSON.stringify(formData));
-                navigate('/my-nfts');
-                return;
-            }
-
-            // Kiểm tra và phê duyệt NFT nếu cần
-            const approved = await nftContract.methods.getApproved(tokenId).call();
-            console.log("NFT được phê duyệt cho:", approved);
-            console.log("Địa chỉ contract đấu giá:", nftAuction._address);
-
-            if (approved.toLowerCase() !== nftAuction._address.toLowerCase()) {
-                enqueueSnackbar('Vui lòng xác nhận giao dịch phê duyệt trong ví của bạn', {
-                    variant: 'info',
-                    autoHideDuration: 5000,
-                });
-
-                try {
-                    await nftContract.methods
-                        .approve(nftAuction._address, tokenId)
-                        .send({
-                            from: account,
-                            gas: 200000  // Sử dụng gas limit cố định
-                        });
-
-                    console.log('Phê duyệt NFT thành công!');
-
-                    enqueueSnackbar('NFT đã được phê duyệt thành công! Vui lòng xác nhận việc tạo đấu giá', {
-                        variant: 'success',
-                        autoHideDuration: 3000,
-                    });
-                } catch (approveError) {
-                    console.error('Lỗi khi phê duyệt NFT:', approveError);
-                    throw new Error('Không thể phê duyệt NFT: ' + approveError.message);
-                }
-            }
-
-            // Tính toán thời gian đấu giá và giá khởi điểm
-            let auctionDuration;
-            if (formData.durationMode === 'date') {
-                const now = new Date();
-                const endDate = new Date(formData.endDate);
-                auctionDuration = Math.max(1, Math.ceil((endDate - now) / (60 * 1000)));
-            } else {
-                auctionDuration = Math.max(1, parseInt(formData.durationMinutes));
-            }
-
-            console.log("Thời gian đấu giá (phút):", auctionDuration);
-
-            const startingPriceWei = web3.utils.toWei(formData.startingPrice.toString(), 'ether');
-            console.log("Giá khởi điểm (Wei):", startingPriceWei);
-
-            // Chuẩn bị tham số
-            /* global BigInt */
-
-            const tokenIdBN = BigInt(tokenId);
-            const startingPriceBN = BigInt(startingPriceWei);
-            const durationBN = BigInt(auctionDuration);
-
-            console.log("Tham số đã định dạng:", {
-                nftContract: formData.tokenAddress,
-                tokenId: tokenIdBN.toString(),
-                startingPrice: startingPriceBN.toString(),
-                duration: durationBN.toString()
-            });
-
-            // Hiển thị thông báo tạo đấu giá
-            enqueueSnackbar('Vui lòng xác nhận giao dịch tạo đấu giá trong ví của bạn', {
-                variant: 'info',
-                autoHideDuration: 5000,
-            });
-
-            try {
-                const gasEstimate = await nftAuction.methods
-                    .createAuction(
-                        formData.tokenAddress,
-                        tokenIdBN,
-                        startingPriceBN,
-                        durationBN
-                    )
-                    .estimateGas({ from: account });
-
-                // Thêm 50% buffer để đảm bảo đủ gas
-                const gasLimit = Math.ceil(gasEstimate * 1.5);
-
-                // Cũng cần đặt giá gas phù hợp
-                const gasPrice = await web3.eth.getGasPrice();
-                const adjustedGasPrice = Math.ceil(Number(gasPrice) * 1.1); // thêm 10% buffer
-
-                // Gọi hàm createAuction với 4 tham số đúng
-                await nftAuction.methods
-                    .createAuction(
-                        formData.tokenAddress,
-                        tokenIdBN,
-                        startingPriceBN,
-                        durationBN
-                    )
-                    .send({
-                        from: account,
-                        gas: gasLimit,
-                        gasPrice: adjustedGasPrice.toString()
-                    });
-
-                console.log('Tạo đấu giá thành công!');
-
-                enqueueSnackbar('Đã tạo đấu giá thành công!', {
-                    variant: 'success',
-                    autoHideDuration: 3000,
-                });
-                navigate('/my-auctions');
-            } catch (createError) {
-                console.error('Lỗi khi tạo đấu giá:', createError);
-
-                // Xử lý lỗi chi tiết
-                let errorMessage = 'Không thể tạo đấu giá';
-
-                if (createError.message) {
-                    if (createError.message.includes('NFT must be verified')) {
-                        errorMessage = 'NFT chưa được xác thực. Vui lòng xác thực NFT trước khi đấu giá.';
-                    } else if (createError.message.includes('Must be the owner')) {
-                        errorMessage = 'Bạn không phải là chủ sở hữu của NFT này.';
-                    } else if (createError.message.includes('must be approved')) {
-                        errorMessage = 'NFT chưa được phê duyệt cho contract đấu giá.';
-                    } else if (createError.message.includes('User denied')) {
-                        errorMessage = 'Bạn đã từ chối giao dịch trong ví.';
-                    } else if (createError.message.includes('gas')) {
-                        errorMessage = 'Ước tính gas thất bại. Mạng có thể đang bị tắc nghẽn.';
-                    } else if (createError.code === -32603) {
-                        errorMessage = 'Lỗi JSON-RPC nội bộ. Vui lòng thử lại hoặc khởi động lại trình duyệt.';
-                    } else {
-                        errorMessage = 'Lỗi: ' + createError.message.split('\n')[0];
-                    }
-                }
-
-                throw new Error(errorMessage);
-            }
-        } catch (error) {
-            console.error("Lỗi tạo đấu giá:", error);
-            setError(error.message || 'Không thể tạo đấu giá. Vui lòng thử lại.');
-            enqueueSnackbar(error.message || 'Không thể tạo đấu giá', {
-                variant: 'error',
-                autoHideDuration: 5000,
-            });
-        } finally {
-            setLoading(false);
+// Improve the checkAndRequestApproval function
+const checkAndRequestApproval = async (tokenAddress, tokenId) => {
+    try {
+      setLoading(true);
+      const web3 = await initWeb3();
+      const { nftAuction } = await getContracts(web3);
+      
+      // Create contract instance for the NFT
+      const nftContract = new web3.eth.Contract(
+        erc721ABI,
+        tokenAddress
+      );
+      
+      // Verify the token exists and you're the owner
+      try {
+        const owner = await nftContract.methods.ownerOf(tokenId).call();
+        if (owner.toLowerCase() !== account.toLowerCase()) {
+          throw new Error(`You don't own this NFT. It's owned by ${owner}`);
         }
-    };
+        console.log("Ownership verified successfully");
+      } catch (error) {
+        console.error("Ownership verification failed:", error);
+        if (error.message.includes("nonexistent token")) {
+          throw new Error(`Token ID ${tokenId} does not exist in contract ${tokenAddress}`);
+        }
+        throw error;
+      }
+      
+      // Check if the auction contract is approved to transfer this NFT
+      const approvedAddress = await nftContract.methods.getApproved(tokenId).call();
+      const isApprovedForAll = await nftContract.methods.isApprovedForAll(account, nftAuction._address).call();
+      
+      console.log("Current approval status:", {
+        specificApproval: approvedAddress,
+        isApprovedForAll: isApprovedForAll,
+        auctionContractAddress: nftAuction._address
+      });
+      
+      // Check for existing auction for this NFT
+      try {
+        const auctionCounter = await nftAuction.methods.auctionCounter().call();
+        console.log(`Total auctions: ${auctionCounter}`);
+        
+        for (let i = 1; i <= auctionCounter; i++) {
+          const auction = await nftAuction.methods.auctions(i).call();
+          if (
+            auction.nftContract.toLowerCase() === tokenAddress.toLowerCase() &&
+            auction.tokenId.toString() === tokenId.toString() &&
+            !auction.ended
+          ) {
+            throw new Error(`An active auction already exists for this NFT (Auction #${i})`);
+          }
+        }
+        console.log("No existing auction found for this NFT");
+      } catch (error) {
+        if (error.message.includes('An active auction already exists')) {
+          throw error;
+        }
+        console.warn("Error checking existing auctions:", error);
+        // Continue if this check fails - not critical
+      }
+      
+      // If not approved, request approval
+      if (approvedAddress.toLowerCase() !== nftAuction._address.toLowerCase() && !isApprovedForAll) {
+        enqueueSnackbar('You need to approve the auction contract to transfer your NFT', {
+          variant: 'info',
+          autoHideDuration: 5000,
+        });
+        
+        // Request approval transaction
+        try {
+          await nftContract.methods.approve(nftAuction._address, tokenId).send({ 
+            from: account 
+          });
+          
+          // Verify approval was successful
+          const newApprovedAddress = await nftContract.methods.getApproved(tokenId).call();
+          if (newApprovedAddress.toLowerCase() !== nftAuction._address.toLowerCase()) {
+            throw new Error("Approval transaction completed but NFT is still not approved");
+          }
+          
+          enqueueSnackbar('Approval granted! Now you can create the auction.', {
+            variant: 'success',
+          });
+        } catch (approvalError) {
+          console.error("Approval transaction failed:", approvalError);
+          throw new Error(`Failed to approve the NFT: ${approvalError.message}`);
+        }
+      }
+      
+      return true;
+    } catch (error) {
+      console.error("Error checking/setting approval:", error);
+      enqueueSnackbar(error.message || 'Failed to approve the NFT', { variant: 'error' });
+      return false;
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  // Update the handleCreateAuction function to handle errors better
+  const handleCreateAuction = async (e) => {
+    e.preventDefault();
+    
+    if (!account) {
+      enqueueSnackbar('Please connect your wallet first', { variant: 'warning' });
+      return;
+    }
+    
+    if (!formData.tokenAddress || !formData.tokenId || !formData.startingPrice) {
+      enqueueSnackbar('Please fill in all required fields', { variant: 'warning' });
+      return;
+    }
+    
+    setLoading(true);
+    setError('');
+    
+    try {
+      const web3 = await initWeb3();
+      const { nftAuction, nftMinting, nftVerifier } = await getContracts(web3);
+      
+      // Validate inputs
+      if (!formData.tokenAddress || !formData.tokenId || !formData.startingPrice || 
+          !(formData.durationMode === 'duration' ? formData.durationMinutes : formData.endDate)) {
+        throw new Error('Vui lòng điền đầy đủ thông tin');
+      }
+      
+      // Make sure tokenAddress is a valid address
+      if (!web3.utils.isAddress(formData.tokenAddress)) {
+        throw new Error('Địa chỉ hợp đồng NFT không hợp lệ');
+      }
+      
+      // Đảm bảo tokenId là string hợp lệ
+      let tokenId;
+      try {
+        const parsedId = parseInt(formData.tokenId, 10);
+        if (isNaN(parsedId) || parsedId < 0 || parsedId.toString() !== formData.tokenId.trim()) {
+          throw new Error('Token ID phải là số nguyên không âm');
+        }
+        tokenId = formData.tokenId.trim();
+        console.log("Xử lý token ID:", tokenId);
+      } catch (err) {
+        throw new Error(`Token ID không hợp lệ: ${err.message}`);
+      }
+      
+      // Check and request approval if needed
+      const isApproved = await checkAndRequestApproval(formData.tokenAddress, tokenId);
+      if (!isApproved) {
+        throw new Error('Could not get approval for the NFT');
+      }
+      
+      // Tính toán thời gian đấu giá và giá khởi điểm
+      let auctionDuration;
+      if (formData.durationMode === 'date') {
+        const now = new Date();
+        const endDate = new Date(formData.endDate);
+        auctionDuration = Math.max(1, Math.ceil((endDate - now) / (60 * 1000)));
+      } else {
+        auctionDuration = Math.max(1, parseInt(formData.durationMinutes));
+      }
+      
+      console.log("Thời gian đấu giá (phút):", auctionDuration);
+      
+      // Validate the starting price
+      let startingPriceWei;
+      try {
+        if (parseFloat(formData.startingPrice) <= 0) {
+          throw new Error('Giá khởi điểm phải lớn hơn 0');
+        }
+        startingPriceWei = web3.utils.toWei(formData.startingPrice.toString(), 'ether');
+        console.log("Giá khởi điểm (Wei):", startingPriceWei);
+      } catch (err) {
+        throw new Error(`Giá khởi điểm không hợp lệ: ${err.message}`);
+      }
+      
+      // Chuẩn bị tham số
+      /* global BigInt */
+      const tokenIdBN = BigInt(tokenId);
+      const startingPriceBN = BigInt(startingPriceWei);
+      const durationBN = BigInt(auctionDuration);
+      
+      console.log("Tham số đã định dạng:", {
+        nftContract: formData.tokenAddress,
+        tokenId: tokenIdBN.toString(),
+        startingPrice: startingPriceBN.toString(),
+        duration: durationBN.toString()
+      });
+      
+      // Hiển thị thông báo tạo đấu giá
+      enqueueSnackbar('Vui lòng xác nhận giao dịch tạo đấu giá trong ví của bạn', {
+        variant: 'info',
+        autoHideDuration: 5000,
+      });
+      
+      // Check the actual parameters expected by the contract
+      console.log("Contract function ABI:", nftAuction._jsonInterface.find(x => x.name === 'createAuction'));
+      
+      // Double-check that the contract supports the token interface
+      try {
+        const nftContract = new web3.eth.Contract(erc721ABI, formData.tokenAddress);
+        const supportsInterface = await nftContract.methods.supportsInterface("0x80ac58cd").call().catch(() => false);
+        if (!supportsInterface) {
+          console.warn("Contract may not fully support ERC-721 interface");
+          enqueueSnackbar('Warning: This contract may not be fully ERC-721 compatible', { 
+            variant: 'warning',
+            autoHideDuration: 7000
+          });
+        }
+      } catch (err) {
+        console.warn("Could not verify ERC-721 compatibility:", err);
+      }
+      
+      // Prepare the transaction - use a try-catch with fallback options
+      let receipt;
+      try {
+        // First try: Estimate gas to catch errors early
+        let estimatedGas;
+        try {
+          estimatedGas = await nftAuction.methods
+            .createAuction(
+              formData.tokenAddress,
+              tokenIdBN,
+              startingPriceBN,
+              durationBN
+            )
+            .estimateGas({ from: account });
+          
+          console.log("Gas estimate successful:", estimatedGas);
+          
+          // Add buffer for safety
+          const gasLimit = Math.ceil(estimatedGas * 1.5);
+          const gasPrice = await web3.eth.getGasPrice();
+          
+          // Execute the transaction with estimated gas
+          receipt = await nftAuction.methods
+            .createAuction(
+              formData.tokenAddress,
+              tokenIdBN,
+              startingPriceBN,
+              durationBN
+            )
+            .send({
+              from: account,
+              gas: gasLimit,
+              gasPrice: gasPrice
+            });
+        } catch (gasEstimationError) {
+          console.error("Gas estimation failed:", gasEstimationError);
+          
+          // Try with specific high gas limit - this may fail too, but worth trying
+          console.log("Attempting direct send with high gas limit...");
+          
+          // Check if there's a revert reason we can extract
+          if (gasEstimationError.message.includes('execution reverted')) {
+            const revertReason = gasEstimationError.message.match(/reason string: ['"](.+?)['"]/);
+            if (revertReason && revertReason[1]) {
+              throw new Error(revertReason[1]);
+            }
+          }
+          
+          // Last attempt with high gas limit
+          receipt = await nftAuction.methods
+            .createAuction(
+              formData.tokenAddress,
+              tokenIdBN,
+              startingPriceBN,
+              durationBN
+            )
+            .send({
+              from: account,
+              gas: 5000000, // High gas limit
+              gasPrice: await web3.eth.getGasPrice()
+            });
+        }
+        
+        console.log('Tạo đấu giá thành công!', receipt);
+        
+        // Extract auction ID from the event
+        if (receipt.events && receipt.events.AuctionCreated) {
+          const auctionId = receipt.events.AuctionCreated.returnValues.auctionId;
+          
+          // Thông báo thành công và chuyển hướng
+          enqueueSnackbar('Tạo đấu giá thành công!', {
+            variant: 'success',
+            autoHideDuration: 3000,
+          });
+          
+          // Chuyển hướng đến trang chi tiết đấu giá
+          setTimeout(() => {
+            navigate(`/auctions/${auctionId}`);
+          }, 1500);
+        } else {
+          throw new Error('Transaction successful but could not find AuctionCreated event');
+        }
+      } catch (txError) {
+        console.error("Transaction error:", txError);
+        
+        // Parse and improve error messages
+        let errorMessage = 'Lỗi: ' + txError.message;
+        
+        // Try to extract revert reason
+        if (txError.message.includes('execution reverted')) {
+          const revertReason = txError.message.match(/reason string: ['"](.+?)['"]/);
+          if (revertReason && revertReason[1]) {
+            errorMessage = revertReason[1];
+          }
+        }
+        
+        // Check for common issues
+        if (txError.message.includes('not owner')) {
+          errorMessage = 'Bạn không phải là chủ sở hữu của NFT này';
+        } else if (txError.message.includes('not approved')) {
+          errorMessage = 'Contract chưa được chấp thuận để chuyển NFT này';
+        } else if (txError.message.includes('insufficient funds')) {
+          errorMessage = 'Không đủ ETH để thanh toán phí giao dịch (gas)';
+        } else if (txError.message.includes('Internal JSON-RPC error')) {
+          errorMessage = 'Lỗi blockchain: Có thể NFT đã có auction, cần phê duyệt, hoặc không thuộc sở hữu của bạn';
+          
+          // Additional checks to diagnose "Internal JSON-RPC error"
+          try {
+            const nftContract = new web3.eth.Contract(erc721ABI, formData.tokenAddress);
+            const owner = await nftContract.methods.ownerOf(tokenId).call();
+            if (owner.toLowerCase() !== account.toLowerCase()) {
+              errorMessage = `Bạn không phải là chủ sở hữu của NFT này. Nó thuộc về ${owner}`;
+            } else {
+              const approvedAddress = await nftContract.methods.getApproved(tokenId).call();
+              if (approvedAddress.toLowerCase() !== nftAuction._address.toLowerCase()) {
+                errorMessage = 'Contract chưa được chấp thuận đúng cách để chuyển NFT này';
+              }
+            }
+          } catch (diagnoseError) {
+            console.warn("Error during additional diagnosis:", diagnoseError);
+          }
+        }
+        
+        setError(errorMessage);
+        enqueueSnackbar(errorMessage, { variant: 'error', autoHideDuration: 5000 });
+      }
+    } catch (error) {
+      console.error("Lỗi khi tạo đấu giá:", error);
+      const errorMessage = error.message || 'Có lỗi xảy ra khi tạo đấu giá';
+      setError(errorMessage);
+      enqueueSnackbar(errorMessage, { variant: 'error' });
+    } finally {
+      setLoading(false);
+    }
+  };  
 
     useEffect(() => {
         if (!account) {
@@ -577,7 +763,7 @@ const CreateAuction = () => {
                     Đấu giá NFT hiện có của bạn. Đảm bảo rằng bạn sở hữu NFT và đã phê duyệt nó cho đấu giá.
                 </Typography>
 
-                <form onSubmit={handleSubmit}>
+                <form onSubmit={handleCreateAuction}>
                     <Grid container spacing={5}>
                         {/* Left Column - NFT Preview */}
                         <Grid item xs={12} md={6}>
@@ -668,6 +854,39 @@ const CreateAuction = () => {
                                     <Typography color="error" sx={{ mt: 2 }}>
                                         {error}
                                     </Typography>
+                                )}
+                                {nftData && (
+                                    <Box mt={2}>
+                                        <Typography variant="h6">NFT đã chọn:</Typography>
+                                        <Box display="flex" alignItems="center" gap={2} mt={1}>
+                                            <img
+                                                src={nftData.imageUrl || 'https://via.placeholder.com/150'}
+                                                alt={nftData.name}
+                                                style={{ width: 100, height: 100, objectFit: 'cover', borderRadius: '4px' }}
+                                            />
+                                            <Box>
+                                                <Typography variant="subtitle1">{nftData.name || `Token ID: ${formData.tokenId}`}</Typography>
+                                                <Typography variant="body2" color="textSecondary">
+                                                    {formData.tokenAddress.substring(0, 8)}...{formData.tokenAddress.substring(formData.tokenAddress.length - 6)}
+                                                </Typography>
+                                                <Typography variant="body2" color="textSecondary">Token ID: {formData.tokenId}</Typography>
+                                            </Box>
+                                            
+                                            {/* Thêm key prop để đảm bảo component re-render khi NFT thay đổi */}
+                                            {networkId && (
+                                                <NFTValidator 
+                                                    key={`${formData.tokenAddress}-${formData.tokenId}`}
+                                                    nft={{
+                                                        tokenId: formData.tokenId,
+                                                        address: formData.tokenAddress,
+                                                        ...nftData
+                                                    }}
+                                                    auctionContractAddress={NFTAuction.networks[networkId]?.address || formData.tokenAddress} 
+                                                    onValidationComplete={setValidationResults} 
+                                                />
+                                            )}
+                                        </Box>
+                                    </Box>
                                 )}
                             </StyledPaper>
                         </Grid>
@@ -788,7 +1007,7 @@ const CreateAuction = () => {
                                         type="submit"
                                         fullWidth
                                         size="large"
-                                        disabled={!nftData || loading}
+                                        disabled={!nftData || loading || (validationResults && !validationResults.isValid)}
                                         sx={{
                                             py: 2.0,
                                             mt: 2
