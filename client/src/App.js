@@ -47,7 +47,7 @@ function LayoutWithHeader() {
           <Routes>
             <Route path="/" element={<Home />} />
             <Route path="/auctions" element={<Auctions />} />
-            <Route path="/auction/:id" element={<AuctionDetail />} />
+            <Route path="/auctions/:id" element={<AuctionDetail />} />
             <Route path="/my-auctions" element={<MyAuctions />} />
             <Route path="/my-nfts" element={<MyNFTs />} /> {/* Add MyNFTs route */}
             <Route path="/create-auction" element={<CreateAuction />} />

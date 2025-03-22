@@ -80,12 +80,23 @@ export const debugBigIntParams = (params) => {
 };
 
 /**
- * Chuẩn hóa token ID để sử dụng trong gọi contract
+ * Chuẩn hóa tokenId để sử dụng trong gọi contract
  * @param {string|number|BigInt} tokenId - Token ID
  * @returns {string} Token ID đã chuẩn hóa
  */
 export const normalizeTokenId = (tokenId) => {
-  return toSafeString(tokenId);
+  if (tokenId === null || tokenId === undefined) {
+    return '0';
+  }
+  
+  if (typeof tokenId === 'string') {
+    // Loại bỏ khoảng trắng và đảm bảo định dạng đúng
+    const cleaned = tokenId.trim();
+    return cleaned === '' ? '0' : cleaned;
+  }
+  
+  // Chuyển đổi số hoặc BigInt thành string
+  return String(tokenId);
 };
 
 /**

@@ -21,15 +21,15 @@ export const getContracts = async (web3) => {
   const networkId = await web3.eth.net.getId();
 
   const nftAuction = new web3.eth.Contract(
-    NFTAuction.abi, 
+    NFTAuction.abi,
     NFTAuction.networks[networkId].address
   );
 
   const nftMinting = new web3.eth.Contract(
-    NFTMinting.abi, 
+    NFTMinting.abi,
     NFTMinting.networks[networkId].address
   );
-  
+
   // Thêm khởi tạo NFTVerifier contract
   const nftVerifier = new web3.eth.Contract(
     NFTVerifier.abi,
@@ -43,24 +43,59 @@ export const approveNFT = async (web3, nftContract, account, tokenId, spenderAdd
   try {
     // Kiểm tra xem NFT đã được phê duyệt chưa
     const approved = await nftContract.methods.getApproved(tokenId).call();
-    
+
     if (approved.toLowerCase() !== spenderAddress.toLowerCase()) {
       const gasEstimate = await nftContract.methods
         .approve(spenderAddress, tokenId)
         .estimateGas({ from: account });
-        
+
       const result = await nftContract.methods
         .approve(spenderAddress, tokenId)
         .send({
           from: account,
           gas: Math.floor(gasEstimate * 1.2) // Add 20% buffer
         });
-        
+
       return result;
     }
     return true; // Đã được phê duyệt
   } catch (error) {
     console.error("Approval error:", error);
+    throw error;
+  }
+};
+
+export const checkNFTVerificationStatus = async (web3, verifierContract, tokenId) => {
+  try {
+    // Kiểm tra xem NFT đã được xác thực chưa
+    const isVerified = await verifierContract.methods.isNFTVerified(tokenId).call();
+
+    if (isVerified) {
+      return { verified: true, status: 'verified', message: 'NFT đã được xác thực' };
+    }
+
+    // Kiểm tra xem có yêu cầu xác thực đang chờ không
+    try {
+      const request = await verifierContract.methods.getVerificationRequest(tokenId).call();
+
+      if (request.requester !== '0x0000000000000000000000000000000000000000') {
+        if (request.status === '1') {
+          return { verified: false, status: 'pending', message: 'Yêu cầu xác thực đang chờ xử lý' };
+        } else if (request.status === '3') {
+          return {
+            verified: false,
+            status: 'rejected',
+            message: `Yêu cầu xác thực đã bị từ chối: ${request.reason}`
+          };
+        }
+      }
+    } catch (e) {
+      console.warn("Không tìm thấy yêu cầu xác thực:", e);
+    }
+
+    return { verified: false, status: 'not_requested', message: 'NFT chưa được yêu cầu xác thực' };
+  } catch (error) {
+    console.error("Lỗi khi kiểm tra trạng thái xác thực:", error);
     throw error;
   }
 };
@@ -80,15 +115,15 @@ export const getUserCreatedAuctions = async (web3, nftAuction, nftMinting, userA
   try {
     const auctionCounter = await nftAuction.methods.auctionCounter().call();
     let userAuctions = [];
-    
+
     for (let i = 1; i <= auctionCounter; i++) {
       const auction = await nftAuction.methods.auctions(i).call();
-      
+
       if (auction.creator.toLowerCase() === userAddress.toLowerCase()) {
         // Lấy thêm thông tin metadata của NFT
         const tokenURI = await nftMinting.methods.tokenURI(auction.tokenId).call();
         let metadata = {};
-        
+
         if (tokenURI.startsWith('http')) {
           try {
             const response = await fetch(tokenURI);
@@ -97,7 +132,7 @@ export const getUserCreatedAuctions = async (web3, nftAuction, nftMinting, userA
             console.warn(`Failed to fetch metadata for token ${auction.tokenId}`);
           }
         }
-        
+
         userAuctions.push({
           id: i,
           ...auction,
@@ -105,7 +140,7 @@ export const getUserCreatedAuctions = async (web3, nftAuction, nftMinting, userA
         });
       }
     }
-    
+
     return userAuctions;
   } catch (error) {
     console.error("Error fetching user created auctions:", error);
@@ -118,15 +153,15 @@ export const getUserBidAuctions = async (web3, nftAuction, nftMinting, userAddre
   try {
     const auctionCounter = await nftAuction.methods.auctionCounter().call();
     let userBids = [];
-    
+
     for (let i = 1; i <= auctionCounter; i++) {
       const auction = await nftAuction.methods.auctions(i).call();
-      
+
       if (auction.highestBidder.toLowerCase() === userAddress.toLowerCase()) {
         // Lấy thêm thông tin metadata của NFT
         const tokenURI = await nftMinting.methods.tokenURI(auction.tokenId).call();
         let metadata = {};
-        
+
         if (tokenURI.startsWith('http')) {
           try {
             const response = await fetch(tokenURI);
@@ -135,7 +170,7 @@ export const getUserBidAuctions = async (web3, nftAuction, nftMinting, userAddre
             console.warn(`Failed to fetch metadata for token ${auction.tokenId}`);
           }
         }
-        
+
         userBids.push({
           id: i,
           ...auction,
@@ -143,7 +178,7 @@ export const getUserBidAuctions = async (web3, nftAuction, nftMinting, userAddre
         });
       }
     }
-    
+
     return userBids;
   } catch (error) {
     console.error("Error fetching user bid auctions:", error);
@@ -154,18 +189,18 @@ export const getUserBidAuctions = async (web3, nftAuction, nftMinting, userAddre
 // Helper function to resolve IPFS URLs
 const resolveIPFSUri = (uri) => {
   if (!uri) return null;
-  
+
   // Handle IPFS URIs
   if (uri.startsWith('ipfs://')) {
     // Try multiple IPFS gateways for better reliability
     return `https://ipfs.io/ipfs/${uri.substring(7)}`;
   }
-  
+
   // Handle base64 data URIs
   if (uri.startsWith('data:')) {
     return uri;
   }
-  
+
   // For http/https URLs, return as is
   return uri;
 };
@@ -176,7 +211,7 @@ export const getAllAuctions = async (web3, nftAuction, nftMinting) => {
     let allAuctions = [];
     for (let i = 1; i <= auctionCounter; i++) {
       const auction = await nftAuction.methods.auctions(i).call();
-      
+
       // Lấy thêm thông tin metadata của NFT
       let metadata = {};
       try {
@@ -193,9 +228,9 @@ export const getAllAuctions = async (web3, nftAuction, nftMinting) => {
           try {
             const externalNFTContract = new web3.eth.Contract(
               [{
-                "inputs": [{"internalType": "uint256", "name": "tokenId", "type": "uint256"}],
+                "inputs": [{ "internalType": "uint256", "name": "tokenId", "type": "uint256" }],
                 "name": "tokenURI",
-                "outputs": [{"internalType": "string", "name": "", "type": "string"}],
+                "outputs": [{ "internalType": "string", "name": "", "type": "string" }],
                 "stateMutability": "view",
                 "type": "function"
               }],
@@ -206,9 +241,9 @@ export const getAllAuctions = async (web3, nftAuction, nftMinting) => {
             console.warn(`Failed to get tokenURI from external contract for auction #${i}:`, err);
           }
         }
-        
+
         console.log(`Token URI for auction #${i}:`, tokenURI);
-        
+
         // Handle different URI formats
         if (tokenURI) {
           if (tokenURI.startsWith('http')) {
@@ -225,7 +260,7 @@ export const getAllAuctions = async (web3, nftAuction, nftMinting) => {
             const jsonString = atob(base64Data);
             metadata = JSON.parse(jsonString);
           }
-          
+
           // Resolve image URL if it's IPFS
           if (metadata.image && metadata.image.startsWith('ipfs://')) {
             metadata.image = resolveIPFSUri(metadata.image);
@@ -235,13 +270,13 @@ export const getAllAuctions = async (web3, nftAuction, nftMinting) => {
       } catch (err) {
         console.warn(`Failed to fetch metadata for token ${auction.tokenId}:`, err);
       }
-      
+
       // Ensure metadata has at least empty strings for important fields
       if (!metadata) metadata = {};
       if (!metadata.name) metadata.name = `NFT #${auction.tokenId}`;
       if (!metadata.description) metadata.description = '';
       if (!metadata.image) metadata.image = 'https://via.placeholder.com/300?text=No+Image';
-      
+
       allAuctions.push({
         id: i,
         ...auction,
@@ -271,12 +306,12 @@ export const getNFTVerificationStatus = async (verifierContract, tokenId) => {
   try {
     // First check if NFT is verified
     const isVerified = await verifierContract.methods.isNFTVerified(tokenId).call();
-    
+
     if (isVerified) {
       const reason = await verifierContract.methods.verificationReasons(tokenId).call();
       return { status: 2, reason }; // 2 = Verified
     }
-    
+
     // If not verified, check for pending or rejected request
     try {
       const request = await verifierContract.methods.getVerificationRequest(tokenId).call();
@@ -288,7 +323,7 @@ export const getNFTVerificationStatus = async (verifierContract, tokenId) => {
     } catch (e) {
       // No request found
     }
-    
+
     return { status: 0, reason: '' }; // 0 = Not requested
   } catch (error) {
     console.error("Error getting NFT verification status:", error);
@@ -302,39 +337,39 @@ export const getExternalNFTMetadata = async (web3, tokenAddress, tokenId) => {
     // Create a minimal ERC721 interface
     const erc721Contract = new web3.eth.Contract([
       {
-        "inputs": [{"internalType": "uint256", "name": "tokenId", "type": "uint256"}],
+        "inputs": [{ "internalType": "uint256", "name": "tokenId", "type": "uint256" }],
         "name": "tokenURI",
-        "outputs": [{"internalType": "string", "name": "", "type": "string"}],
+        "outputs": [{ "internalType": "string", "name": "", "type": "string" }],
         "stateMutability": "view",
         "type": "function"
       },
       {
-        "inputs": [{"internalType": "uint256", "name": "tokenId", "type": "uint256"}],
+        "inputs": [{ "internalType": "uint256", "name": "tokenId", "type": "uint256" }],
         "name": "ownerOf",
-        "outputs": [{"internalType": "address", "name": "", "type": "address"}],
+        "outputs": [{ "internalType": "address", "name": "", "type": "address" }],
         "stateMutability": "view",
         "type": "function"
       }
     ], tokenAddress);
-    
+
     let metadata = {
       name: `NFT #${tokenId}`,
       image: 'https://via.placeholder.com/400x400?text=No+Image',
       description: '',
       attributes: []
     };
-    
+
     try {
       const tokenURI = await erc721Contract.methods.tokenURI(tokenId).call();
-      
+
       if (tokenURI) {
         // Resolve IPFS or HTTP URI
         const resolvedURI = resolveIPFSUri(tokenURI);
-        
+
         if (resolvedURI && resolvedURI.startsWith('http')) {
           const response = await fetch(resolvedURI);
           const data = await response.json();
-          
+
           metadata = {
             name: data.name || `NFT #${tokenId}`,
             image: resolveIPFSUri(data.image) || 'https://via.placeholder.com/400x400?text=No+Image',
@@ -346,10 +381,10 @@ export const getExternalNFTMetadata = async (web3, tokenAddress, tokenId) => {
     } catch (error) {
       console.warn("Could not fetch token metadata:", error);
     }
-    
+
     // Get owner
     const owner = await erc721Contract.methods.ownerOf(tokenId).call();
-    
+
     return {
       tokenId,
       tokenAddress,
@@ -366,45 +401,45 @@ export const getExternalNFTMetadata = async (web3, tokenAddress, tokenId) => {
 export const getUserNFTs = async (web3, nftContract, userAddress) => {
   try {
     console.log(`Fetching NFTs owned by ${userAddress}`);
-    
+
     const userNFTs = [];
-    
+
     // Instead of using totalSupply, use the balanceOf method to get the number of NFTs owned by the user
     try {
       const balance = await nftContract.methods.balanceOf(userAddress).call();
       console.log(`User owns ${balance} NFTs`);
-      
+
       // For each NFT the user owns, get its token ID using tokenOfOwnerByIndex
       for (let i = 0; i < balance; i++) {
         try {
           // Try to use tokenOfOwnerByIndex if available (ERC721Enumerable)
           const tokenId = await nftContract.methods.tokenOfOwnerByIndex(userAddress, i).call();
           console.log(`Found token ID: ${tokenId}`);
-          
+
           // Get token metadata
-          let metadata = { 
-            name: `NFT #${tokenId}`, 
+          let metadata = {
+            name: `NFT #${tokenId}`,
             image: 'https://via.placeholder.com/400x400?text=No+Image',
             description: ''
           };
-          
+
           try {
             const tokenURI = await nftContract.methods.tokenURI(tokenId).call();
-            
+
             if (tokenURI) {
               // Process token URI - same as before
               if (tokenURI.startsWith('ipfs://')) {
                 const resolvedURI = `https://ipfs.io/ipfs/${tokenURI.substring(7)}`;
                 const response = await fetch(resolvedURI);
                 const data = await response.json();
-                
+
                 metadata = {
                   name: data.name || `NFT #${tokenId}`,
                   image: data.image || 'https://via.placeholder.com/400x400?text=No+Image',
                   description: data.description || '',
                   attributes: data.attributes || []
                 };
-                
+
                 // Resolve image URI if it's IPFS
                 if (metadata.image && metadata.image.startsWith('ipfs://')) {
                   metadata.image = `https://ipfs.io/ipfs/${metadata.image.substring(7)}`;
@@ -412,7 +447,7 @@ export const getUserNFTs = async (web3, nftContract, userAddress) => {
               } else if (tokenURI.startsWith('http')) {
                 const response = await fetch(tokenURI);
                 const data = await response.json();
-                
+
                 metadata = {
                   name: data.name || `NFT #${tokenId}`,
                   image: data.image || 'https://via.placeholder.com/400x400?text=No+Image',
@@ -424,7 +459,7 @@ export const getUserNFTs = async (web3, nftContract, userAddress) => {
           } catch (err) {
             console.warn(`Failed to fetch metadata for token ${tokenId}:`, err);
           }
-          
+
           userNFTs.push({
             tokenId,
             ...metadata
@@ -435,13 +470,13 @@ export const getUserNFTs = async (web3, nftContract, userAddress) => {
           break;
         }
       }
-      
+
     } catch (error) {
       console.error("Error accessing balanceOf method:", error);
       // If balanceOf is also not available, this may not be an ERC721 contract
       // Just return an empty array
     }
-    
+
     return userNFTs;
   } catch (error) {
     console.error("Error fetching user's NFTs:", error);
@@ -452,27 +487,23 @@ export const getUserNFTs = async (web3, nftContract, userAddress) => {
 // Add a utility function to handle transaction errors
 export const handleTransactionError = (error) => {
   console.error('Transaction error:', error);
-  
-  // Xử lý lỗi chi tiết từ VM Exception
+
+  // Extract revert reason from VM Exception
   if (error.data && error.data.data) {
-    // Trích xuất thông tin lỗi từ VM Exception
     const vmData = error.data.data;
-    
-    // Kiểm tra lỗi cụ thể từ VM
+
     if (vmData.message === "revert") {
-      // Kiểm tra nếu có reason cụ thể
       if (vmData.reason) {
         return `Smart contract từ chối giao dịch: ${vmData.reason}`;
       }
-      
-      // Trường hợp không có reason cụ thể, trả về thông báo chung hơn
+
       return 'Smart contract từ chối giao dịch. Vui lòng kiểm tra quyền truy cập và tính hợp lệ của token.';
     }
   }
-  
+
   // Common MetaMask errors with user-friendly messages
   if (error.code === -32603) {
-    return 'Lỗi nội bộ JSON-RPC. Kiểm tra xem bạn đã phê duyệt token và có quyền tạo đấu giá hay không.';
+    return 'Lỗi nội bộ JSON-RPC. Kiểm tra xem NFT đã được gửi vào hợp đồng chưa và bạn có quyền đặt giá không.';
   } else if (error.message && error.message.includes('User denied')) {
     return 'Giao dịch đã bị từ chối trong ví của bạn';
   } else if (error.message && error.message.includes('gas')) {
@@ -481,20 +512,16 @@ export const handleTransactionError = (error) => {
     return 'Lỗi nonce giao dịch. Hãy thử đặt lại tài khoản MetaMask của bạn.';
   } else if (error.message && error.message.includes('insufficient funds')) {
     return 'Không đủ tiền để thực hiện giao dịch. Vui lòng kiểm tra số dư của bạn.';
-  } else if (error.message && error.message.includes('ERC721: transfer')) {
-    return 'Lỗi chuyển token NFT. Vui lòng kiểm tra quyền sở hữu và phê duyệt token.';
-  } else if (error.message && error.message.includes('ERC721: caller is not')) {
-    return 'Bạn không có quyền thực hiện thao tác này với NFT. Vui lòng kiểm tra quyền sở hữu.';
   } else if (error.message) {
-    // Trích xuất thông báo lỗi cụ thể nếu có
+    // Extract specific error message if available
     const errorMatch = error.message.match(/reason string: ['"](.+?)['"]/);
     if (errorMatch && errorMatch[1]) {
       return `Lỗi smart contract: ${errorMatch[1]}`;
     }
-    
+
     return 'Lỗi: ' + error.message.split('\n')[0];
   }
-  
+
   return 'Lỗi không xác định khi thực hiện giao dịch. Vui lòng thử lại.';
 };
 
@@ -502,13 +529,13 @@ export const handleTransactionError = (error) => {
 export const checkAuctionPrerequisites = async (web3, nftAddress, tokenId, account) => {
   try {
     const nftContract = new web3.eth.Contract(ERC721ABI, nftAddress);
-    
+
     // Kiểm tra owner của token
     const owner = await nftContract.methods.ownerOf(tokenId).call();
     if (owner.toLowerCase() !== account.toLowerCase()) {
       throw new Error('Bạn không phải là chủ sở hữu của NFT này');
     }
-    
+
     // Kiểm tra các điều kiện khác nếu cần
     return true;
   } catch (error) {
@@ -523,44 +550,44 @@ export const sendTransaction = async (method, options = {}) => {
   let retryCount = 0;
 
   while (retryCount <= maxRetries) {
+    try {
+      // Thêm gas limit hợp lý nếu chưa được cung cấp
+      const txOptions = {
+        gas: 500000,  // Tăng từ 300000 lên 500000
+        ...options
+      };
+
+      // Ước tính gas price với fallback
       try {
-          // Thêm gas limit hợp lý nếu chưa được cung cấp
-          const txOptions = { 
-              gas: 500000,  // Tăng từ 300000 lên 500000
-              ...options 
-          };
-
-          // Ước tính gas price với fallback
-          try {
-              const web3 = await initWeb3();
-              const gasPrice = await web3.eth.getGasPrice();
-              // Thêm 20% buffer cho gas price (tăng từ 10%)
-              txOptions.gasPrice = Math.floor(parseInt(gasPrice) * 1.2).toString();
-          } catch (gasPriceError) {
-              console.warn('Không thể ước tính gas price:', gasPriceError);
-          }
-
-          // Gửi giao dịch
-          return await method.send(txOptions);
-      } catch (error) {
-          retryCount++;
-
-          // Không retry nếu người dùng từ chối
-          if (error.message && (
-              error.message.includes('User denied') || 
-              error.message.includes('user rejected')
-          )) {
-              throw error;
-          }
-
-          if (retryCount > maxRetries) {
-              throw error;
-          }
-
-          // Chờ trước khi retry (exponential backoff)
-          const waitTime = 2000 * retryCount;  // Tăng thời gian chờ
-          console.log(`Đang thử lại giao dịch sau ${waitTime/1000}s (lần ${retryCount}/${maxRetries})...`);
-          await new Promise(resolve => setTimeout(resolve, waitTime));
+        const web3 = await initWeb3();
+        const gasPrice = await web3.eth.getGasPrice();
+        // Thêm 20% buffer cho gas price (tăng từ 10%)
+        txOptions.gasPrice = Math.floor(parseInt(gasPrice) * 1.2).toString();
+      } catch (gasPriceError) {
+        console.warn('Không thể ước tính gas price:', gasPriceError);
       }
+
+      // Gửi giao dịch
+      return await method.send(txOptions);
+    } catch (error) {
+      retryCount++;
+
+      // Không retry nếu người dùng từ chối
+      if (error.message && (
+        error.message.includes('User denied') ||
+        error.message.includes('user rejected')
+      )) {
+        throw error;
+      }
+
+      if (retryCount > maxRetries) {
+        throw error;
+      }
+
+      // Chờ trước khi retry (exponential backoff)
+      const waitTime = 2000 * retryCount;  // Tăng thời gian chờ
+      console.log(`Đang thử lại giao dịch sau ${waitTime / 1000}s (lần ${retryCount}/${maxRetries})...`);
+      await new Promise(resolve => setTimeout(resolve, waitTime));
+    }
   }
 };

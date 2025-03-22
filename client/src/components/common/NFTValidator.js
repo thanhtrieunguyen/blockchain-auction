@@ -14,46 +14,50 @@ const NFTValidator = ({ nft, auctionContractAddress, onValidationComplete }) => 
   // Sử dụng useEffect riêng để kiểm tra xác thực NFT từ smart contract
   useEffect(() => {
     if (!nft || !nft.tokenId) return;
-    
+  
     const checkVerificationStatus = async () => {
       try {
         const web3 = await initWeb3();
         const { nftVerifier } = await getContracts(web3);
-        
+  
         if (!nftVerifier || !nftVerifier.methods) {
           console.log("NFTVerifier contract không khả dụng");
           return;
         }
-        
+  
         const tokenId = nft.tokenId;
         const isVerified = await nftVerifier.methods.isNFTVerified(tokenId).call();
         console.log(`Trạng thái xác thực của NFT #${tokenId} từ smart contract:`, isVerified);
-        
+  
         setVerified(isVerified);
-        
-        // Nếu NFT đã được xác thực, tự động đặt kết quả xác thực thành hợp lệ
-        if (isVerified) {
-          const results = {
-            isValid: true,
+  
+        // Nếu NFT chưa được xác thực, hiển thị thông báo rõ ràng
+        if (!isVerified) {
+          setValidationResults({
+            isValid: false,
             ownershipValid: true,
             approvalValid: true,
-            verified: true,
-            errors: []
-          };
-          
-          setValidationResults(results);
+            verified: false,
+            errors: ['NFT chưa được xác thực. Vui lòng yêu cầu xác thực trước khi tạo đấu giá.']
+          });
           setValidationAttempted(true);
           if (onValidationComplete) {
-            onValidationComplete(results);
+            onValidationComplete({
+              isValid: false,
+              ownershipValid: true,
+              approvalValid: true,
+              verified: false,
+              errors: ['NFT chưa được xác thực. Vui lòng yêu cầu xác thực trước khi tạo đấu giá.']
+            });
           }
         }
       } catch (error) {
         console.error("Lỗi khi kiểm tra trạng thái xác thực NFT:", error);
       }
     };
-    
+  
     checkVerificationStatus();
-  }, [nft && nft.tokenId, onValidationComplete]);
+  }, [nft && nft.tokenId, onValidationComplete]);  
   
   useEffect(() => {
     // Nếu NFT đã được xác thực từ smart contract, không cần kiểm tra thêm
@@ -184,77 +188,77 @@ const NFTValidator = ({ nft, auctionContractAddress, onValidationComplete }) => 
   if (!nft) return null;
   
   return (
-    <Box sx={{ mt: 2, mb: 2 }}>
-      {validating && (
-        <Box display="flex" alignItems="center">
-          <CircularProgress size={20} sx={{ mr: 1 }} />
-          <Typography>Đang xác thực NFT...</Typography>
-        </Box>
-      )}
-      
-      {verified && (
-        <Alert severity="success">
-          <Typography variant="body2">
-            NFT này đã được xác thực. Bạn có thể tiếp tục tạo đấu giá.
-          </Typography>
-        </Alert>
-      )}
-      
-      {!verified && validationResults && !validationResults.isValid && (
-        <Alert severity="error">
-          <Typography variant="body2" fontWeight="bold">
-            Lỗi xác thực NFT:
-          </Typography>
-          <ul style={{ margin: 0, paddingLeft: '20px' }}>
-            {validationResults.errors.map((error, index) => (
-              <li key={index}>
-                <Typography variant="body2">{error}</Typography>
-              </li>
-            ))}
-          </ul>
-        </Alert>
-      )}
-      
-      {!verified && validationResults && validationResults.errors.length > 0 && (
-        <Alert severity={validationResults.isValid ? "warning" : "error"}>
-          <Typography variant="body2" fontWeight="bold">
-            {validationResults.isValid ? "Cảnh báo:" : "Lỗi:"}
-          </Typography>
-          <ul style={{ margin: 0, paddingLeft: '20px' }}>
-            {validationResults.errors.map((error, index) => (
-              <li key={index}>
-                <Typography variant="body2">{error}</Typography>
-              </li>
-            ))}
-          </ul>
-        </Alert>
-      )}
-      
-      {!verified && validationResults && validationResults.isValid && !validationResults.approvalValid && (
-        <Alert severity="info">
-          <Typography variant="body2">
-            NFT của bạn cần được phê duyệt trước khi tạo đấu giá. Quá trình này sẽ được tự động thực hiện khi bạn tạo đấu giá.
-          </Typography>
-        </Alert>
-      )}
-      
-      {!verified && validationResults && validationResults.isValid && validationResults.ownershipValid && validationResults.approvalValid && (
-        <Alert severity="info">
-          <Typography variant="body2">
-            NFT hợp lệ nhưng chưa được xác thực. Bạn cần yêu cầu xác thực NFT trước khi tạo đấu giá.
-          </Typography>
-        </Alert>
-      )}
-      
-      {!verified && validationAttempted && !validating && (
-        <Alert severity="warning">
-          <Typography variant="body2">
-            NFT này chưa được xác thực. Vui lòng yêu cầu xác thực trước khi tạo đấu giá.
-          </Typography>
-        </Alert>
-      )}
-    </Box>
-  );
+      <Box sx={{ mt: 2, mb: 2 }}>
+        {validating && (
+          <Box display="flex" alignItems="center">
+            <CircularProgress size={20} sx={{ mr: 1 }} />
+            <Typography>Đang xác thực NFT...</Typography>
+          </Box>
+        )}
+        
+        {verified && (
+          <Alert severity="success">
+            <Typography variant="body2">
+              NFT này đã được xác thực. Bạn có thể tiếp tục tạo đấu giá.
+            </Typography>
+          </Alert>
+        )}
+        
+        {!verified && validationResults && !validationResults.isValid && (
+          <Alert severity="error">
+            <Typography variant="body2" fontWeight="bold">
+              Lỗi xác thực NFT:
+            </Typography>
+            <ul style={{ margin: 0, paddingLeft: '20px' }}>
+              {validationResults.errors.map((error, index) => (
+                <li key={index}>
+                  <Typography variant="body2">{error}</Typography>
+                </li>
+              ))}
+            </ul>
+          </Alert>
+        )}
+        
+        {!verified && validationResults && validationResults.errors.length > 0 && (
+          <Alert severity={validationResults.isValid ? "warning" : "error"}>
+            <Typography variant="body2" fontWeight="bold">
+              {validationResults.isValid ? "Cảnh báo:" : "Lỗi:"}
+            </Typography>
+            <ul style={{ margin: 0, paddingLeft: '20px' }}>
+              {validationResults.errors.map((error, index) => (
+                <li key={index}>
+                  <Typography variant="body2">{error}</Typography>
+                </li>
+              ))}
+            </ul>
+          </Alert>
+        )}
+        
+        {!verified && validationResults && validationResults.isValid && !validationResults.approvalValid && (
+          <Alert severity="info">
+            <Typography variant="body2">
+              NFT của bạn cần được phê duyệt trước khi tạo đấu giá. Quá trình này sẽ được tự động thực hiện khi bạn tạo đấu giá.
+            </Typography>
+          </Alert>
+        )}
+        
+        {!verified && validationResults && validationResults.isValid && validationResults.ownershipValid && validationResults.approvalValid && (
+          <Alert severity="info">
+            <Typography variant="body2">
+              NFT hợp lệ nhưng chưa được xác thực. Bạn cần yêu cầu xác thực NFT trước khi tạo đấu giá.
+            </Typography>
+          </Alert>
+        )}
+        
+        {!verified && validationAttempted && !validating && (
+          <Alert severity="warning">
+            <Typography variant="body2">
+              NFT này chưa được xác thực. Vui lòng yêu cầu xác thực trước khi tạo đấu giá.
+            </Typography>
+          </Alert>
+        )}
+      </Box>
+    );
 };
 
 // Helper function to get contracts

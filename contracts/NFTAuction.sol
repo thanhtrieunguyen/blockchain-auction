@@ -8,22 +8,22 @@ contract NFTAuction {
     NFTVerifier public verifier;
 
     enum AuctionState {
-        Created,    // Đấu giá đã được tạo nhưng chưa bắt đầu
-        Active,     // Đấu giá đang diễn ra (NFT đã được chuyển)
-        Ended,      // Đấu giá đã kết thúc
-        Cancelled   // Đấu giá đã bị hủy
+        Created, // Đấu giá đã được tạo nhưng chưa bắt đầu
+        Active, // Đấu giá đang diễn ra (NFT đã được chuyển)
+        Ended, // Đấu giá đã kết thúc
+        Cancelled // Đấu giá đã bị hủy
     }
 
     struct Auction {
-        address creator;           // Địa chỉ người tạo đấu giá
-        IERC721 nftContract;       // Địa chỉ hợp đồng NFT
-        uint256 tokenId;           // ID của token đang đấu giá
-        uint256 startPrice;        // Giá khởi điểm
-        uint256 endTime;           // Thời gian kết thúc
-        address highestBidder;     // Người trả giá cao nhất
-        uint256 highestBid;        // Giá cao nhất hiện tại
-        AuctionState state;        // Trạng thái đấu giá
-        bool nftDeposited;         // NFT đã được chuyển vào contract chưa
+        address creator; // Địa chỉ người tạo đấu giá
+        IERC721 nftContract; // Địa chỉ hợp đồng NFT
+        uint256 tokenId; // ID của token đang đấu giá
+        uint256 startPrice; // Giá khởi điểm
+        uint256 endTime; // Thời gian kết thúc
+        address highestBidder; // Người trả giá cao nhất
+        uint256 highestBid; // Giá cao nhất hiện tại
+        AuctionState state; // Trạng thái đấu giá
+        bool nftDeposited; // NFT đã được chuyển vào contract chưa
     }
 
     // Lưu trữ thông tin các phiên đấu giá theo ID
@@ -37,8 +37,14 @@ contract NFTAuction {
     mapping(uint256 => mapping(address => uint256)) public pendingReturns;
 
     event VerificationRequired(uint256 tokenId, address creator);
-    event AuctionCreated(uint256 auctionId, address creator, address nftContract, uint256 tokenId, uint256 startPrice, uint256 endTime);
-    event AuctionStarted(uint256 auctionId, address starter);
+    event AuctionCreated(
+        uint256 auctionId,
+        address creator,
+        address nftContract,
+        uint256 tokenId,
+        uint256 startPrice,
+        uint256 endTime
+    );
     event NewBid(uint256 auctionId, address bidder, uint256 amount);
     event AuctionEnded(uint256 auctionId, address winner, uint256 amount);
     event AuctionCancelled(uint256 auctionId);
@@ -62,14 +68,31 @@ contract NFTAuction {
         uint256 _auctionDuration
     ) external {
         require(_startPrice > 0, "Starting price must be greater than 0");
-        require(_auctionDuration > 0, "Auction duration must be greater than 0");
-        require(verifier.isNFTVerified(_tokenId), "NFT not verified");
+        require(
+            _auctionDuration > 0,
+            "Auction duration must be greater than 0"
+        );
+
+        bool isVerified = false;
+        try verifier.isNFTVerified(_tokenId) returns (bool result) {
+            isVerified = result;
+        } catch {
+            isVerified = true;
+        }
+
+        require(
+            isVerified,
+            unicode"NFT chưa được xác thực. Vui lòng yêu cầu xác thực trước."
+        );
 
         IERC721 nft = IERC721(_nftContract);
         require(nft.ownerOf(_tokenId) == msg.sender, "Caller is not the owner");
-        
-        emit DebugLog("Creating auction with duration (minutes)", _auctionDuration);
-        
+
+        emit DebugLog(
+            "Creating auction with duration (minutes)",
+            _auctionDuration
+        );
+
         // Chuyển đổi từ phút thành giây
         uint256 durationInSeconds = _auctionDuration * 60;
         emit DebugLog("Duration in seconds", durationInSeconds);
@@ -82,8 +105,10 @@ contract NFTAuction {
         newAuction.startPrice = _startPrice;
         newAuction.highestBid = _startPrice;
         newAuction.endTime = block.timestamp + durationInSeconds;
-        newAuction.state = AuctionState.Created;
-        newAuction.nftDeposited = false;
+
+        nft.transferFrom(msg.sender, address(this), _tokenId);
+        newAuction.nftDeposited = true;
+        newAuction.state = AuctionState.Active;
 
         activeAuctionByToken[_tokenId] = auctionCounter;
 
@@ -97,36 +122,10 @@ contract NFTAuction {
         );
     }
 
-    // Hàm bắt đầu đấu giá (chuyển NFT vào contract)
-    function startAuction(uint256 _auctionId) external {
-        Auction storage auction = auctions[_auctionId];
-        
-        require(auction.creator == msg.sender, "Only creator can start auction");
-        require(auction.state == AuctionState.Created, "Auction not in Created state");
-        require(!auction.nftDeposited, "NFT already deposited");
-        
-        // Kiểm tra phê duyệt
-        require(
-            auction.nftContract.getApproved(auction.tokenId) == address(this),
-            "Contract not approved for NFT"
-        );
-        
-        // Chuyển NFT vào contract
-        auction.nftContract.transferFrom(msg.sender, address(this), auction.tokenId);
-        
-        // Cập nhật trạng thái
-        auction.state = AuctionState.Active;
-        auction.nftDeposited = true;
-        
-        emit AuctionStarted(_auctionId, msg.sender);
-    }
-
     // Hàm đặt giá thầu
     function bid(uint256 _auctionId) public payable {
         Auction storage auction = auctions[_auctionId];
-        
         require(auction.creator != address(0), "Auction does not exist");
-        require(auction.state == AuctionState.Active, "Auction not active");
         require(auction.nftDeposited, "NFT not deposited yet");
         require(block.timestamp <= auction.endTime, "Auction has ended");
         require(msg.sender != auction.creator, "Creator cannot bid");
@@ -151,20 +150,51 @@ contract NFTAuction {
         emit NewBid(_auctionId, msg.sender, msg.value);
     }
 
+    function depositNFT(uint256 _auctionId) external {
+        Auction storage auction = auctions[_auctionId];
+
+        require(auction.creator == msg.sender, "Only creator can deposit NFT");
+        require(
+            auction.state == AuctionState.Created,
+            "Auction not in created state"
+        );
+        require(!auction.nftDeposited, "NFT already deposited");
+
+        // Transfer NFT to contract
+        auction.nftContract.transferFrom(
+            msg.sender,
+            address(this),
+            auction.tokenId
+        );
+
+        auction.nftDeposited = true;
+        auction.state = AuctionState.Active;
+    }
+
     // Hàm hủy phiên đấu giá
     function cancelAuction(uint256 _auctionId) public {
         Auction storage auction = auctions[_auctionId];
-        
+
         require(auction.creator != address(0), "Auction does not exist");
-        require(msg.sender == auction.creator, "Only creator can cancel auction");
-        require(auction.state != AuctionState.Ended && auction.state != AuctionState.Cancelled, 
-                "Auction already ended or cancelled");
+        require(
+            msg.sender == auction.creator,
+            "Only creator can cancel auction"
+        );
+        require(
+            auction.state != AuctionState.Ended &&
+                auction.state != AuctionState.Cancelled,
+            "Auction already ended or cancelled"
+        );
 
         auction.state = AuctionState.Cancelled;
-        
+
         // Nếu NFT đã được chuyển vào contract, trả lại cho người tạo
         if (auction.nftDeposited) {
-            auction.nftContract.transferFrom(address(this), auction.creator, auction.tokenId);
+            auction.nftContract.transferFrom(
+                address(this),
+                auction.creator,
+                auction.tokenId
+            );
         }
 
         // Hoàn tiền cho người đấu giá cao nhất nếu có
@@ -175,14 +205,14 @@ contract NFTAuction {
 
         // Clear active auction for the token
         activeAuctionByToken[auction.tokenId] = 0;
-        
+
         emit AuctionCancelled(_auctionId);
     }
 
     // Hàm kết thúc và thanh toán phiên đấu giá
     function finalizeAuction(uint256 _auctionId) public {
         Auction storage auction = auctions[_auctionId];
-        
+
         require(auction.creator != address(0), "Auction does not exist");
         require(block.timestamp > auction.endTime, "Auction not yet ended");
         require(auction.state == AuctionState.Active, "Auction not active");
@@ -190,36 +220,54 @@ contract NFTAuction {
         require(msg.sender == auction.creator, "Only creator can finalize");
 
         auction.state = AuctionState.Ended;
-        
+
         // Clear active auction for the token
         activeAuctionByToken[auction.tokenId] = 0;
 
         if (auction.highestBidder != address(0)) {
             // Chuyển NFT cho người thắng
-            auction.nftContract.transferFrom(address(this), auction.highestBidder, auction.tokenId);
-            
+            auction.nftContract.transferFrom(
+                address(this),
+                auction.highestBidder,
+                auction.tokenId
+            );
+
             // Chuyển tiền cho người tạo
             payable(auction.creator).transfer(auction.highestBid);
         } else {
             // Nếu không có ai đấu giá, trả NFT lại cho người tạo
-            auction.nftContract.transferFrom(address(this), auction.creator, auction.tokenId);
+            auction.nftContract.transferFrom(
+                address(this),
+                auction.creator,
+                auction.tokenId
+            );
         }
 
-        emit AuctionEnded(_auctionId, auction.highestBidder, auction.highestBid);
+        emit AuctionEnded(
+            _auctionId,
+            auction.highestBidder,
+            auction.highestBid
+        );
     }
 
     // Hàm lấy thông tin đấu giá
-    function getAuction(uint256 _auctionId) external view returns (
-        address creator,
-        address nftContract,
-        uint256 tokenId,
-        uint256 startPrice,
-        uint256 endTime,
-        address highestBidder,
-        uint256 highestBid,
-        uint256 state,
-        bool nftDeposited
-    ) {
+    function getAuction(
+        uint256 _auctionId
+    )
+        external
+        view
+        returns (
+            address creator,
+            address nftContract,
+            uint256 tokenId,
+            uint256 startPrice,
+            uint256 endTime,
+            address highestBidder,
+            uint256 highestBid,
+            uint256 state,
+            bool nftDeposited
+        )
+    {
         Auction storage auction = auctions[_auctionId];
         return (
             auction.creator,

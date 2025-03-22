@@ -20,6 +20,7 @@ import {
 import Web3Button from '../components/Web3Button';
 import { initWeb3, getContracts } from '../web3';
 import { useSnackbar } from 'notistack';
+import erc721ABI from '../abis/erc721ABI.json';
 
 const BidAmount = styled(Typography)(({ theme }) => ({
     color: '#2081E2',
@@ -88,6 +89,9 @@ const AuctionDetail = () => {
     const [bidLoading, setBidLoading] = useState(false);
     const navigate = useNavigate();
     const { enqueueSnackbar } = useSnackbar();
+    const [canDeposit, setCanDeposit] = useState(false);
+    const [isNFTDeposited, setIsNFTDeposited] = useState(true);
+
 
     useEffect(() => {
         const fetchAuctionDetails = async () => {
@@ -107,9 +111,18 @@ const AuctionDetail = () => {
                 // Explicitly convert tokenId to string and log it for debugging
                 const tokenIdRaw = auctionData.tokenId;
                 const tokenIdString = String(tokenIdRaw);
-                
+
                 console.log("Token ID raw:", tokenIdRaw);
                 console.log("Token ID as string:", tokenIdString);
+
+                const isDeposited = auctionData.nftDeposited;
+                setIsNFTDeposited(isDeposited);
+
+                // Check if NFT needs to be deposited and user is the creator
+                const needsDeposit = !isDeposited &&
+                    account &&
+                    account.toLowerCase() === auctionData.creator.toLowerCase();
+                setCanDeposit(needsDeposit);
 
                 // Get NFT metadata
                 let metadata = {
@@ -241,19 +254,19 @@ const AuctionDetail = () => {
                         fromBlock: 0,
                         toBlock: 'latest'
                     });
-                    
+
                     console.log("Bid events:", events);
-                    
+
                     // Process events one by one to avoid Promise.all errors
                     const bidHistoryEntries = [];
-                    
+
                     for (const event of events) {
                         try {
                             // Convert BigInt values to regular JavaScript numbers
-                            const blockNumber = typeof event.blockNumber === 'bigint' 
-                                ? Number(event.blockNumber) 
+                            const blockNumber = typeof event.blockNumber === 'bigint'
+                                ? Number(event.blockNumber)
                                 : Number(event.blockNumber);
-                                
+
                             // Get the block timestamp
                             let timestamp;
                             try {
@@ -264,10 +277,10 @@ const AuctionDetail = () => {
                                 console.error("Error fetching block timestamp:", blockError);
                                 timestamp = Math.floor(Date.now() / 1000);
                             }
-                            
+
                             // Convert to milliseconds for JavaScript Date
                             const timeValue = timestamp * 1000;
-                                
+
                             // Create the bid entry with safe conversions
                             bidHistoryEntries.push({
                                 bidder: event.returnValues.bidder,
@@ -280,17 +293,17 @@ const AuctionDetail = () => {
                             console.error("Error processing bid event:", eventError, event);
                         }
                     }
-                    
+
                     // Sort by timestamp (descending)
                     bidHistoryEntries.sort((a, b) => b.timestamp - a.timestamp);
-                    
+
                     // Update bid history
                     setBidHistory(bidHistoryEntries);
-                    
+
                     console.log("Bid history:", bidHistoryEntries);
                 } catch (eventError) {
                     console.error("Error fetching bid history events:", eventError);
-                    
+
                     // Fallback to just showing the current highest bid
                     const fallbackBidHistory = [];
                     if (auctionData.highestBidder !== '0x0000000000000000000000000000000000000000') {
@@ -321,7 +334,7 @@ const AuctionDetail = () => {
         };
 
         fetchAuctionDetails();
-    }, [id]);
+    }, [id, account]);
 
     // Update countdown timer
     useEffect(() => {
@@ -360,24 +373,56 @@ const AuctionDetail = () => {
         return () => clearInterval(timer);
     }, [auction, timeRemaining]);
 
-    const handleBid = async () => {
-        if (!account) {
-            enqueueSnackbar("Vui lòng kết nối ví của bạn trước", { variant: "warning" });
-            return;
-        }
+    const handleDepositNFT = async () => {
+        try {
+            setLoading(true);
+            const web3 = await initWeb3();
+            const { nftAuction } = await getContracts(web3);
 
-        if (parseFloat(bidAmount) < parseFloat(minBidAmount)) {
-            enqueueSnackbar(`Giá đấu phải ít nhất ${minBidAmount} ETH`, { variant: "error" });
-            return;
+            // First approve the NFT transfer if needed
+            const nftContract = new web3.eth.Contract(erc721ABI, auction.contractAddress);
+            const isApproved = await nftContract.methods.isApprovedForAll(account, nftAuction._address).call();
+            const approvedAddress = await nftContract.methods.getApproved(auction.tokenId).call();
+
+            if (!isApproved && approvedAddress.toLowerCase() !== nftAuction._address.toLowerCase()) {
+                await nftContract.methods.approve(nftAuction._address, auction.tokenId).send({ from: account });
+            }
+
+            // Deposit NFT
+            await nftAuction.methods.depositNFT(id).send({ from: account });
+
+            enqueueSnackbar("NFT đã được gửi vào hợp đồng thành công!", { variant: "success" });
+            window.location.reload();
+        } catch (error) {
+            console.error("Error depositing NFT:", error);
+            enqueueSnackbar(error.message || "Không thể gửi NFT", { variant: "error" });
+        } finally {
+            setLoading(false);
         }
+    };
+
+    const handleBid = async () => {
+        if (!account || !bidAmount) return;
 
         try {
             setBidLoading(true);
             const web3 = await initWeb3();
             const { nftAuction } = await getContracts(web3);
-
-            // Convert bid amount to wei
+            /* global BigInt */
+            // Convert bid amount from ETH to Wei using web3.utils
             const bidAmountWei = web3.utils.toWei(bidAmount.toString(), 'ether');
+
+            // Get current highest bid in Wei
+            const auctionData = await nftAuction.methods.auctions(id).call();
+            const currentHighestBid = BigInt(auctionData.highestBid);
+
+            // Convert bidAmountWei to BigInt for comparison
+            const newBidAmount = BigInt(bidAmountWei);
+
+            // Kiểm tra giá đặt phải cao hơn giá cao nhất hiện tại
+            if (newBidAmount <= currentHighestBid) {
+                throw new Error('Bid amount must be higher than current highest bid');
+            }
 
             // Place bid
             await nftAuction.methods.bid(id).send({
@@ -385,22 +430,53 @@ const AuctionDetail = () => {
                 value: bidAmountWei
             });
 
-            enqueueSnackbar("Đặt giá thành công!", { variant: "success" });
-
-            // Refresh auction data
+            enqueueSnackbar('Đặt giá thành công!', { variant: 'success' });
             window.location.reload();
         } catch (error) {
-            console.error("Error placing bid:", error);
-            enqueueSnackbar(error.message || "Không thể đặt giá", { variant: "error" });
+            console.error('Error placing bid:', error);
+            enqueueSnackbar(
+                error.message || 'Không thể đặt giá. Vui lòng thử lại.',
+                { variant: 'error' }
+            );
         } finally {
             setBidLoading(false);
         }
     };
 
+    // Helper function to extract revert reason from error
+    const extractRevertReason = (error) => {
+        if (!error) return null;
+
+        // Check for revert reason in error message
+        if (error.message) {
+            // Check for common error patterns
+            if (error.message.includes("NFT not deposited yet")) {
+                return "NFT chưa được gửi vào hợp đồng. Vui lòng liên hệ người tạo đấu giá.";
+            }
+            if (error.message.includes("Auction has ended")) {
+                return "Phiên đấu giá đã kết thúc";
+            }
+            if (error.message.includes("Creator cannot bid")) {
+                return "Người tạo đấu giá không thể tham gia đấu giá";
+            }
+            if (error.message.includes("Bid must be greater than")) {
+                return "Giá đặt phải cao hơn giá hiện tại";
+            }
+
+            // Try to extract reason string from error
+            const revertReasonMatch = error.message.match(/reason string: ['"](.+?)['"]/);
+            if (revertReasonMatch && revertReasonMatch[1]) {
+                return revertReasonMatch[1];
+            }
+        }
+
+        return null;
+    };
+
     // Create a component for displaying wallet addresses (without copy functionality)
     const WalletAddressBadge = ({ address }) => {
         if (!address) return null;
-        
+
         return (
             <AddressBadge>
                 <Typography variant="body2" sx={{ fontFamily: 'monospace', fontWeight: 500 }}>
@@ -520,7 +596,7 @@ const AuctionDetail = () => {
                                     <WalletAddressBadge address={auction.creator} />
                                 </Grid>
                             </Grid>
-                            
+
                             {/* <Typography variant="body1" sx={{ mb: 3 }}>
                                 {auction.description || 'No description available for this NFT.'}
                             </Typography> */}
@@ -630,10 +706,20 @@ const AuctionDetail = () => {
                                             <Web3Button
                                                 fullWidth
                                                 onClick={handleBid}
-                                                disabled={bidLoading || account.toLowerCase() === auction.creator.toLowerCase()}
+                                                disabled={bidLoading || !isNFTDeposited || account.toLowerCase() === auction.creator.toLowerCase()}
                                             >
-                                                {bidLoading ? 'Đang Đặt Giá...' : 'Đặt Giá'}
+                                                {!isNFTDeposited
+                                                    ? 'Chờ người tạo gửi NFT'
+                                                    : bidLoading
+                                                        ? 'Đang Đặt Giá...'
+                                                        : 'Đặt Giá'}
                                             </Web3Button>
+
+                                            {!isNFTDeposited && (
+                                                <Typography color="error" variant="body2" sx={{ mt: 1, textAlign: 'center' }}>
+                                                    Không thể đặt giá vì NFT chưa được gửi vào hợp đồng
+                                                </Typography>
+                                            )}
 
                                             {account.toLowerCase() === auction.creator.toLowerCase() && (
                                                 <Typography color="error" variant="body2" sx={{ mt: 1, textAlign: 'center' }}>
@@ -641,6 +727,30 @@ const AuctionDetail = () => {
                                                 </Typography>
                                             )}
                                         </Box>
+                                    )}
+
+                                    {!isNFTDeposited && (
+                                        <Alert severity="warning" sx={{ mb: 3 }}>
+                                            <Typography variant="body1" sx={{ fontWeight: 'bold' }}>
+                                                NFT chưa được gửi vào hợp đồng
+                                            </Typography>
+                                            <Typography variant="body2" sx={{ mt: 1 }}>
+                                                {canDeposit
+                                                    ? "Bạn cần gửi NFT vào hợp đồng để kích hoạt đấu giá. Người khác sẽ không thể đặt giá cho đến khi bạn hoàn tất bước này."
+                                                    : "Người tạo đấu giá chưa gửi NFT vào hợp đồng. Bạn không thể đặt giá cho đến khi NFT được gửi vào."}
+                                            </Typography>
+                                            {canDeposit && (
+                                                <Button
+                                                    variant="contained"
+                                                    color="warning"
+                                                    onClick={handleDepositNFT}
+                                                    disabled={loading}
+                                                    sx={{ mt: 2 }}
+                                                >
+                                                    {loading ? <CircularProgress size={24} /> : "Gửi NFT và kích hoạt đấu giá"}
+                                                </Button>
+                                            )}
+                                        </Alert>
                                     )}
 
                                     {auction.status !== 'active' && (
