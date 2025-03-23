@@ -19,6 +19,7 @@ import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
 import { useSnackbar } from 'notistack';
 import { sendTransaction, initWeb3 } from '../../web3'; // Import the utility functions
 
+
 // This component handles displaying and requesting NFT verification
 const VerificationStatus = ({ verifierContract, tokenId, account, onRequestVerification }) => {
   const [status, setStatus] = useState(0); // 0=not requested, 1=pending, 2=verified, 3=rejected

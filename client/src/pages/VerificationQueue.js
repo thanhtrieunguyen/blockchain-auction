@@ -14,8 +14,8 @@ import {
   Divider,
   CardMedia,
   CircularProgress,
-  Container,
   IconButton,
+  Container,
   Tooltip,
   Avatar
 } from '@mui/material';
@@ -25,8 +25,18 @@ import PendingIcon from '@mui/icons-material/Pending';
 import SearchIcon from '@mui/icons-material/Search';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import ImageIcon from '@mui/icons-material/Image';
+import InfoIcon from '@mui/icons-material/Info';
+import LinkIcon from '@mui/icons-material/Link';
 import { AccountContext } from '../context/AccountContext';
 import { toSafeNumber, toSafeString, normalizeTokenId, toDate } from '../utils/bigIntUtils';
+import { resolveIPFSUri, resolveIPFSMetadata } from '../utils/ipfsUtils';
+import Dialog from '@mui/material/Dialog';
+import DialogActions from '@mui/material/DialogActions';
+import DialogContent from '@mui/material/DialogContent';
+import DialogTitle from '@mui/material/DialogTitle';
+import ListItem from '@mui/material/ListItem';
+import ListItemText from '@mui/material/ListItemText';
+import List from '@mui/material/List';
 
 const VerificationQueue = () => {
   const { account, contracts, isVerifier } = useContext(AccountContext);
@@ -36,6 +46,8 @@ const VerificationQueue = () => {
   const [loading, setLoading] = useState(true);
   const [alert, setAlert] = useState({ open: false, message: '', severity: 'success' });
   const [searchTokenId, setSearchTokenId] = useState('');
+  const [detailModalOpen, setDetailModalOpen] = useState(false);
+  const [selectedNft, setSelectedNft] = useState(null);
 
   useEffect(() => {
     if (contracts?.nftVerifier && account) {
@@ -44,194 +56,108 @@ const VerificationQueue = () => {
   }, [contracts, account]);
 
   const loadPendingRequests = async () => {
-    try {
-      setLoading(true);
-
-      console.log("Đang tải yêu cầu xác thực đang chờ...");
-
-      // Kiểm tra xem contract có sẵn không
-      if (!contracts.nftVerifier || !contracts.nftVerifier.methods) {
-        console.error("Contract NFTVerifier không khả dụng");
-        throw new Error("Contract NFTVerifier không khả dụng");
-      }
-      
-      // Lấy danh sách tokenId đang chờ xác minh
-      let pendingTokenIds = [];
       try {
-        pendingTokenIds = await contracts.nftVerifier.methods.getPendingTokens().call();
-        console.log("Pending token IDs:", pendingTokenIds);
-      } catch (error) {
-        console.error("Lỗi khi lấy danh sách token đang chờ:", error);
-        setAlert({
-          open: true,
-          message: 'Không thể lấy danh sách token đang chờ xác thực: ' + error.message,
-          severity: 'error'
-        });
-        setLoading(false);
-        return;
-      }
-
-      // Chuyển đổi tất cả token ID sang string để tránh lỗi BigInt
-      const normalizedIds = pendingTokenIds.map(id => id.toString());
-      setPendingRequests(normalizedIds);
-
-      // Load NFT details for each request
-      const details = {};
-      for (const tokenId of normalizedIds) {
-        try {
-          console.log("Đang tải thông tin cho token ID:", tokenId);
-          // Kiểm tra xem nftMinting có sẵn không
-          if (!contracts.nftMinting || !contracts.nftMinting.methods) {
-            console.warn("Contract NFTMinting không khả dụng");
-            details[tokenId] = { 
-              name: `Token ID: ${tokenId}`, 
-              image: '', 
-              tokenId: tokenId,
-              status: 'pending',
-              isValid: false 
-            };
-            continue;
-          }
-
-          // Kiểm tra token có tồn tại không trước khi tiếp tục
-          let tokenExists = false;
+        setLoading(true);
+        console.log("Đang tải yêu cầu xác thực đang chờ...");
+    
+        // Kiểm tra xem contract có sẵn không
+        if (!contracts.nftVerifier || !contracts.nftVerifier.methods) {
+          console.error("Contract NFTVerifier không khả dụng");
+          throw new Error("Contract NFTVerifier không khả dụng");
+        }
+    
+        // Gọi hàm getPendingRequests
+        console.log("Gọi hàm getPendingRequests...");
+        const requests = await contracts.nftVerifier.methods.getPendingTokens().call();
+        console.log("Yêu cầu xác thực đang chờ:", requests);
+    
+        // Chuyển đổi tất cả token ID sang string để tránh lỗi BigInt
+        const requestsNormalized = requests.map(tokenId => normalizeTokenId(tokenId));
+        setPendingRequests(requestsNormalized);
+    
+        // Load NFT details for each request
+        const details = {};
+        for (const tokenId of requestsNormalized) {
           try {
-            // Cách kiểm tra nhẹ nhàng hơn: thử lấy tổng supply và kiểm tra tokenId có nhỏ hơn không
-            const totalSupply = await contracts.nftMinting.methods.totalSupply().call();
-            tokenExists = parseInt(tokenId) < parseInt(totalSupply);
-            
-            if (!tokenExists) {
-              console.warn(`Token ID ${tokenId} không tồn tại hoặc vượt quá tổng số lượng`);
+            console.log("Đang tải thông tin cho token ID:", tokenId);
+            // Kiểm tra xem nftMinting có sẵn không
+            if (!contracts.nftMinting || !contracts.nftMinting.methods) {
+              console.warn("Contract NFTMinting không khả dụng");
+              details[tokenId] = { name: `Token ID: ${tokenId}`, image: '' };
+              continue;
+            }
+    
+            // Lấy thông tin yêu cầu xác thực
+            const request = await contracts.nftVerifier.methods.getVerificationRequest(tokenId).call();
+            console.log("Yêu cầu xác thực cho token ID", tokenId, ":", request);
+            // Lấy tokenURI - Đảm bảo sử dụng string cho tokenId
+            let tokenURI;
+            try {
+              tokenURI = await contracts.nftMinting.methods.tokenURI(tokenId).call();
+              console.log("Token URI:", tokenURI);
+            } catch (uriError) {
+              console.warn(`Không thể lấy tokenURI cho token ID ${tokenId}:`, uriError);
               details[tokenId] = { 
-                name: `Token ID: ${tokenId} (Không tồn tại)`, 
-                image: '', 
-                tokenId: tokenId,
-                status: 'pending',
-                isValid: false 
+                name: `Token ID: ${tokenId}`, 
+                image: '',
+                requester: request.requester,
+                requestTime: toDate(request.requestTime).toLocaleString()
               };
               continue;
             }
-          } catch (existsError) {
-            console.warn(`Không thể kiểm tra sự tồn tại của token ID ${tokenId}:`, existsError);
-            // Tiếp tục và để các lỗi riêng lẻ xảy ra ở mỗi cuộc gọi
-          }
-
-          // Lấy thông tin yêu cầu xác thực - kiểm tra method tồn tại
-          let requester = '';
-          let requestTime = '';
-          try {
-            // Kiểm tra xem phương thức có tồn tại không
-            if (typeof contracts.nftVerifier.methods.getVerificationRequest === 'function') {
-              const request = await contracts.nftVerifier.methods.getVerificationRequest(tokenId).call();
-              requester = request.requester;
-              requestTime = toDate(request.requestTime).toLocaleString();
-            } else {
-              console.warn("Phương thức getVerificationRequest không tồn tại trong contract");
-              
-              // Thử sử dụng các phương thức thay thế
-              if (typeof contracts.nftVerifier.methods.verificationRequests === 'function') {
-                const request = await contracts.nftVerifier.methods.verificationRequests(tokenId).call();
-                requester = request.requester;
-                requestTime = toDate(request.requestTime).toLocaleString();
-              } else {
-                // Nếu không có phương thức nào tồn tại, sử dụng thông tin có sẵn
-                requestTime = new Date().toLocaleString();
-                
-                // Thử lấy chủ sở hữu làm người yêu cầu
-                try {
-                  requester = await contracts.nftMinting.methods.ownerOf(tokenId).call();
-                } catch (ownerError) {
-                  console.warn(`Không thể lấy chủ sở hữu token ID ${tokenId}:`, ownerError);
-                  requester = 'Không xác định';
-                }
-              }
+    
+            if (!tokenURI) {
+              console.warn("Không có tokenURI cho token ID:", tokenId);
+              details[tokenId] = { 
+                name: `Token ID: ${tokenId}`, 
+                image: '',
+                requester: request.requester,
+                requestTime: toDate(request.requestTime).toLocaleString()
+              };
+              continue;
             }
-          } catch (requestError) {
-            console.warn(`Không thể lấy thông tin yêu cầu xác thực cho token ID ${tokenId}:`, requestError);
-            // Tiếp tục với giá trị mặc định
-            requestTime = new Date().toLocaleString();
-            requester = 'Không xác định';
-          }
-          
-          // Lấy thông tin chủ sở hữu
-          let owner = 'Không xác định';
-          try {
-            owner = await contracts.nftMinting.methods.ownerOf(tokenId).call();
-          } catch (ownerError) {
-            console.warn(`Không thể lấy chủ sở hữu cho token ID ${tokenId}:`, ownerError);
-          }
-          
-          // Lấy thông tin bộ sưu tập
-          let collectionName = 'NFT Collection';
-          try {
-            collectionName = await contracts.nftMinting.methods.name().call();
-          } catch (nameError) {
-            console.warn(`Không thể lấy tên bộ sưu tập:`, nameError);
-          }
-          
-          // Địa chỉ hợp đồng
-          const contractAddress = contracts.nftMinting._address || 'Không xác định';
-
-          // Lấy tokenURI - Đảm bảo sử dụng string cho tokenId
-          let tokenURI = '';
-          let tokenMetadata = null;
-          try {
-            tokenURI = await contracts.nftMinting.methods.tokenURI(tokenId).call();
-            console.log("Token URI:", tokenURI);
-            
+    
             // Fetch metadata
             try {
               const response = await fetch(tokenURI);
-              tokenMetadata = await response.json();
-              console.log("Metadata cho token ID", tokenId, ":", tokenMetadata);
+              const metadata = await response.json();
+              console.log("Metadata cho token ID", tokenId, ":", metadata);
+    
+              details[tokenId] = {
+                ...metadata,
+                requester: request.requester,
+                requestTime: toDate(request.requestTime).toLocaleString()
+              };
             } catch (metadataError) {
               console.error(`Lỗi khi tải metadata cho token ${tokenId}:`, metadataError);
-              tokenMetadata = null;
+              details[tokenId] = { 
+                name: `Token ID: ${tokenId}`, 
+                image: '',
+                requester: request.requester,
+                requestTime: toDate(request.requestTime).toLocaleString()
+              };
             }
-          } catch (uriError) {
-            console.warn(`Không thể lấy tokenURI cho token ID ${tokenId}:`, uriError);
-            tokenURI = '';
-            tokenMetadata = null;
+          } catch (error) {
+            console.error(`Lỗi khi tải thông tin cho token ${tokenId}:`, error);
+            details[tokenId] = { 
+              name: `Token ID: ${tokenId}`, 
+              image: '' 
+            };
           }
-
-          // Tạo object thông tin chi tiết
-          details[tokenId] = {
-            name: tokenMetadata?.name || `Token ID: ${tokenId}`,
-            description: tokenMetadata?.description || 'Không có mô tả',
-            image: tokenMetadata?.image || '',
-            requester: requester,
-            requestTime: requestTime,
-            owner: owner,
-            collectionName: collectionName,
-            contractAddress: contractAddress,
-            tokenId: tokenId,
-            status: 'pending',
-            isValid: true
-          };
-        } catch (error) {
-          console.error(`Lỗi khi tải thông tin cho token ${tokenId}:`, error);
-          details[tokenId] = {
-            name: `Token ID: ${tokenId}`,
-            image: '',
-            tokenId: tokenId,
-            status: 'pending',
-            isValid: false
-          };
         }
+    
+        setNftDetails(details);
+      } catch (error) {
+        console.error('Lỗi khi tải yêu cầu xác thực đang chờ:', error);
+        setAlert({
+          open: true,
+          message: 'Không thể tải yêu cầu xác thực: ' + error.message,
+          severity: 'error'
+        });
+      } finally {
+        setLoading(false);
       }
-
-      setNftDetails(details);
-    } catch (error) {
-      console.error('Lỗi khi tải yêu cầu xác thực đang chờ:', error);
-      setAlert({
-        open: true,
-        message: 'Không thể tải yêu cầu xác thực: ' + error.message,
-        severity: 'error'
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
+    }; 
 
   const handleVerify = async (tokenId) => {
     if (!verificationReason[tokenId]) {
@@ -301,43 +227,51 @@ const VerificationQueue = () => {
     }
   };
 
-    const handleCloseAlert = () => {
+  const handleCloseAlert = () => {
     setAlert({ ...alert, open: false });
+  };
+  
+  const openDetailModal = (tokenId) => {
+    setSelectedNft(nftDetails[tokenId]);
+    setDetailModalOpen(true);
+  };
+
+  const formatAddress = (address) => {
+    if (!address || address === 'Unknown' || address === 'Không xác định') return 'Không xác định';
+    return `${address.substring(0, 6)}...${address.substring(address.length - 4)}`;
   };
 
   if (loading) {
     return (
-      <Container maxWidth="lg" sx={{ py: 4 }}>
-        <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '60vh' }}>
-          <CircularProgress size={60} thickness={4} />
-        </Box>
-      </Container>
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '60vh' }}>
+        <CircularProgress size={40} thickness={4} />
+      </Box>
     );
   }
 
   if (!isVerifier) {
     return (
-      <Container maxWidth="lg" sx={{ py: 4 }}>
-        <Paper elevation={3} sx={{ p: 4, borderRadius: 2 }}>
-          <Alert severity="warning" variant="filled" sx={{ mb: 3 }}>
-            <Typography variant="subtitle1" fontWeight="medium">
-              Bạn không phải là người xác thực được ủy quyền
-            </Typography>
-            <Typography variant="body2" sx={{ mt: 1 }}>
-              Vui lòng liên hệ với quản trị viên để được cấp quyền.
-            </Typography>
-          </Alert>
+      <Box sx={{ p: 4, maxWidth: 800, mx: 'auto' }}>
+        <Alert severity="warning" variant="filled" sx={{ mb: 3 }}>
+          <Typography variant="subtitle1" fontWeight="medium">
+            Bạn không phải là người xác thực được ủy quyền
+          </Typography>
+          <Typography variant="body2" sx={{ mt: 1 }}>
+            Vui lòng liên hệ với quản trị viên để được cấp quyền.
+          </Typography>
+        </Alert>
+        <Paper elevation={2} sx={{ p: 3 }}>
           <Typography sx={{ mt: 2, color: 'text.secondary' }}>
             Địa chỉ tài khoản hiện tại: <Box component="span" sx={{ color: 'primary.main' }}>{account}</Box>
           </Typography>
         </Paper>
-      </Container>
+      </Box>
     );
   }
 
   return (
-    <Container maxWidth="lg" sx={{ py: 4 }}>
-      <Paper elevation={3} sx={{ p: { xs: 2, md: 4 }, borderRadius: 2, mb: 4 }}>
+    <Box sx={{ p: { xs: 2, md: 4 }, maxWidth: 1200, mx: 'auto' }}>
+      <Paper elevation={3} sx={{ p: 3, mb: 4, borderRadius: 2 }}>
         <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, justifyContent: 'space-between', alignItems: { xs: 'flex-start', sm: 'center' }, mb: 3 }}>
           <Typography variant="h5" fontWeight="bold" color="primary.main" gutterBottom>
             Yêu cầu xác thực đang chờ xử lý
@@ -355,7 +289,7 @@ const VerificationQueue = () => {
         <Divider sx={{ mb: 3 }} />
 
         {loading ? (
-          <Box sx={{ display: 'flex', justifyContent: 'center', p: 5 }}>
+          <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
             <CircularProgress />
           </Box>
         ) : pendingRequests.length === 0 ? (
@@ -366,119 +300,165 @@ const VerificationQueue = () => {
           <Grid container spacing={3}>
             {pendingRequests.map((tokenId) => (
               <Grid item xs={12} sm={6} md={4} key={tokenId}>
-                <Card elevation={3} sx={{ 
-                  borderRadius: 2, 
+                <Card elevation={2} sx={{ 
+                  height: '100%', 
+                  display: 'flex', 
+                  flexDirection: 'column',
                   transition: 'transform 0.2s, box-shadow 0.2s',
                   '&:hover': {
                     transform: 'translateY(-5px)',
-                    boxShadow: 8
+                    boxShadow: 6
                   }
                 }}>
-                  {nftDetails[tokenId]?.image ? (
-                    <CardMedia
-                      component="img"
-                      height="200"
-                      image={nftDetails[tokenId].image}
-                      alt={nftDetails[tokenId]?.name || `Token ${toSafeString(tokenId)}`}
-                      sx={{ objectFit: 'contain', bgcolor: '#f5f5f5' }}
-                      onError={(e) => {
-                        // Xử lý lỗi khi hình ảnh không tải được
-                        e.target.onerror = null;
-                        e.target.style.display = 'none';
-                        e.target.parentElement.style.display = 'flex';
-                        e.target.parentElement.style.alignItems = 'center';
-                        e.target.parentElement.style.justifyContent = 'center';
-                        e.target.parentElement.style.height = '200px';
-                        e.target.parentElement.style.backgroundColor = '#f5f5f5';
-                        const placeholder = document.createElement('div');
-                        placeholder.style.display = 'flex';
-                        placeholder.style.flexDirection = 'column';
-                        placeholder.style.alignItems = 'center';
-                        placeholder.style.justifyContent = 'center';
-                        placeholder.innerHTML = `
-                          <svg style="width:64px;height:64px;color:#bdbdbd;" viewBox="0 0 24 24">
-                            <path fill="currentColor" d="M19,19H5V5H19M19,3H5A2,2 0 0,0 3,5V19A2,2 0 0,0 5,21H19A2,2 0 0,0 21,19V5A2,2 0 0,0 19,3M13.96,12.29L11.21,15.83L9.25,13.47L6.5,17H17.5L13.96,12.29Z" />
-                          </svg>
-                          <p style="margin-top:8px;color:#757575;">Không thể tải hình ảnh</p>
-                        `;
-                        e.target.parentElement.appendChild(placeholder);
-                      }}
-                    />
-                  ) : (
-                    <Box sx={{ 
-                      height: 200, 
-                      display: 'flex', 
-                      alignItems: 'center', 
-                      justifyContent: 'center',
-                      flexDirection: 'column',
-                      bgcolor: '#f5f5f5' 
+                  <Box sx={{ position: 'relative', paddingTop: '75%', bgcolor: '#f5f5f5' }}>
+                    {nftDetails[tokenId]?.image ? (
+                      <CardMedia
+                        component="img"
+                        sx={{
+                          position: 'absolute',
+                          top: 0,
+                          left: 0,
+                          width: '100%',
+                          height: '100%',
+                          objectFit: 'contain'
+                        }}
+                        image={nftDetails[tokenId].image}
+                        alt={nftDetails[tokenId]?.name || `Token ${toSafeString(tokenId)}`}
+                        onError={(e) => {
+                          // Xử lý lỗi khi hình ảnh không tải được
+                          e.target.onerror = null;
+                          e.target.style.display = 'none';
+                          e.target.parentElement.innerHTML = `
+                            <div style="display:flex;align-items:center;justify-content:center;height:100%;width:100%;flex-direction:column;">
+                              <svg style="width:64px;height:64px;color:#bdbdbd;" viewBox="0 0 24 24">
+                                <path fill="currentColor" d="M19,19H5V5H19M19,3H5A2,2 0 0,0 3,5V19A2,2 0 0,0 5,21H19A2,2 0 0,0 21,19V5A2,2 0 0,0 19,3M13.96,12.29L11.21,15.83L9.25,13.47L6.5,17H17.5L13.96,12.29Z" />
+                              </svg>
+                              <p style="margin-top:8px;color:#757575;">Không thể tải hình ảnh</p>
+                            </div>
+                          `;
+                        }}
+                      />
+                    ) : (
+                      <Box sx={{
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        width: '100%',
+                        height: '100%',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexDirection: 'column'
+                      }}>
+                        <ImageIcon sx={{ fontSize: 64, color: '#cccccc' }} />
+                        <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                          Không có hình ảnh
+                        </Typography>
+                      </Box>
+                    )}
+                    <Box sx={{
+                      position: 'absolute',
+                      top: 10,
+                      right: 10,
+                      bgcolor: 'rgba(0,0,0,0.6)',
+                      color: 'white',
+                      borderRadius: 1,
+                      px: 1,
+                      py: 0.5,
+                      fontSize: '0.75rem'
                     }}>
-                      <ImageIcon sx={{ fontSize: 64, color: 'text.disabled' }} />
-                      <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                        Không có hình ảnh
-                      </Typography>
+                      ID: {tokenId}
                     </Box>
-                  )}
-                  <CardContent sx={{ p: 3 }}>
-                    <Typography variant="h6" gutterBottom fontWeight="bold" noWrap>
-                      {nftDetails[tokenId]?.name || `Token ID: ${toSafeString(tokenId)}`}
-                    </Typography>
-
+                  </Box>
+                  
+                  <CardContent sx={{ flexGrow: 1, p: 2 }}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
+                      <Typography variant="h6" sx={{ 
+                        fontWeight: 500, 
+                        fontSize: '1.1rem',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                        width: '80%'
+                      }}>
+                        {nftDetails[tokenId]?.name || `Token ID: ${toSafeString(tokenId)}`}
+                      </Typography>
+                      <Tooltip title="Xem chi tiết NFT">
+                        <IconButton 
+                          size="small" 
+                          color="primary" 
+                          onClick={() => openDetailModal(tokenId)}
+                          sx={{ ml: 1 }}
+                        >
+                          <InfoIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                    </Box>
+                    
                     <Chip
                       icon={<PendingIcon />}
                       label="Đang chờ xác thực"
                       color="warning"
-                      sx={{ mb: 2, fontWeight: 'medium' }}
+                      size="small"
+                      sx={{ mb: 2, fontSize: '0.75rem' }}
                     />
-
-                    <Box sx={{ mb: 2, bgcolor: 'background.neutral', p: 1.5, borderRadius: 1 }}>
-                      <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                        <Box component="span" fontWeight="medium">Token ID:</Box> {toSafeString(nftDetails[tokenId]?.tokenId || tokenId)}
+                    
+                    <Box sx={{ mt: 1.5 }}>
+                      <Typography variant="body2" color="text.secondary" sx={{ 
+                        display: 'flex', 
+                        alignItems: 'center',
+                        fontSize: '0.8rem', 
+                        mb: 0.5
+                      }}>
+                        <strong style={{ minWidth: '80px' }}>Người yêu cầu:</strong> 
+                        <Tooltip title={nftDetails[tokenId]?.requester || 'Unknown'}>
+                          <span>{formatAddress(nftDetails[tokenId]?.requester)}</span>
+                        </Tooltip>
                       </Typography>
                       
-                      {nftDetails[tokenId]?.collectionName && (
-                        <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                          <Box component="span" fontWeight="medium">Bộ sưu tập:</Box> {nftDetails[tokenId].collectionName}
-                        </Typography>
-                      )}
-                      
                       {nftDetails[tokenId]?.owner && (
-                        <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                          <Box component="span" fontWeight="medium">Chủ sở hữu:</Box> {
-                            nftDetails[tokenId].owner.substring(0, 6) +
-                            '...' +
-                            nftDetails[tokenId].owner.substring(38)
-                          }
+                        <Typography variant="body2" color="text.secondary" sx={{ 
+                          display: 'flex', 
+                          alignItems: 'center',
+                          fontSize: '0.8rem', 
+                          mb: 0.5
+                        }}>
+                          <strong style={{ minWidth: '80px' }}>Chủ sở hữu:</strong> 
+                          <Tooltip title={nftDetails[tokenId]?.owner}>
+                            <span>{formatAddress(nftDetails[tokenId]?.owner)}</span>
+                          </Tooltip>
                         </Typography>
                       )}
                       
-                      {nftDetails[tokenId]?.requester && (
-                        <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                          <Box component="span" fontWeight="medium">Người yêu cầu:</Box> {
-                            nftDetails[tokenId].requester.substring(0, 6) +
-                            '...' +
-                            nftDetails[tokenId].requester.substring(38)
-                          }
-                        </Typography>
-                      )}
-
                       {nftDetails[tokenId]?.requestTime && (
-                        <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                          <Box component="span" fontWeight="medium">Thời gian yêu cầu:</Box> {toSafeString(nftDetails[tokenId].requestTime)}
+                        <Typography variant="body2" color="text.secondary" sx={{ 
+                          display: 'flex', 
+                          alignItems: 'center',
+                          fontSize: '0.8rem',
+                          mb: 0.5
+                        }}>
+                          <strong style={{ minWidth: '80px' }}>Thời gian yêu cầu:</strong> 
+                          <span>{toSafeString(nftDetails[tokenId].requestTime)}</span>
                         </Typography>
                       )}
                       
-                      {nftDetails[tokenId]?.contractAddress && (
-                        <Typography variant="body2" color="text.secondary">
-                          <Box component="span" fontWeight="medium">Địa chỉ hợp đồng:</Box> {
-                            nftDetails[tokenId].contractAddress.substring(0, 6) +
-                            '...' +
-                            nftDetails[tokenId].contractAddress.substring(38)
-                          }
+                      {nftDetails[tokenId]?.description && (
+                        <Typography variant="body2" color="text.secondary" sx={{ 
+                          mt: 1.5, 
+                          fontSize: '0.8rem',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          display: '-webkit-box',
+                          WebkitLineClamp: 2,
+                          WebkitBoxOrient: 'vertical',
+                        }}>
+                          <strong>Mô tả:</strong> {nftDetails[tokenId].description}
                         </Typography>
                       )}
                     </Box>
-
+                    
+                    <Divider sx={{ my: 2 }} />
+                    
                     <TextField
                       fullWidth
                       label="Lý do xác thực/từ chối"
@@ -489,45 +469,29 @@ const VerificationQueue = () => {
                         ...verificationReason,
                         [tokenId]: e.target.value
                       })}
-                      sx={{ mb: 3 }}
-                      variant="outlined"
+                      sx={{ mb: 2, '& .MuiOutlinedInput-root': { borderRadius: 1.5 } }}
+                      placeholder="Nhập lý do xác thực hoặc từ chối NFT này..."
                     />
-
-                    <Box sx={{ display: 'flex', gap: 2, justifyContent: 'space-between' }}>
+                    
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 2 }}>
                       <Button
                         variant="contained"
                         color="primary"
                         startIcon={<VerifiedIcon />}
                         onClick={() => handleVerify(tokenId)}
                         disabled={!verificationReason[tokenId]}
-                        sx={{ 
-                          flexGrow: 1, 
-                          py: 1,
-                          fontWeight: 'bold',
-                          boxShadow: 2,
-                          '&:hover': {
-                            boxShadow: 4
-                          }
-                        }}
+                        sx={{ borderRadius: 1.5, flex: 1, mr: 1, fontWeight: 'bold' }}
                       >
                         Xác thực
                       </Button>
-
+                      
                       <Button
                         variant="contained"
                         color="error"
                         startIcon={<CancelIcon />}
                         onClick={() => handleReject(tokenId)}
                         disabled={!verificationReason[tokenId]}
-                        sx={{ 
-                          flexGrow: 1, 
-                          py: 1,
-                          fontWeight: 'bold',
-                          boxShadow: 2,
-                          '&:hover': {
-                            boxShadow: 4
-                          }
-                        }}
+                        sx={{ borderRadius: 1.5, flex: 1, ml: 1, fontWeight: 'bold' }}
                       >
                         Từ chối
                       </Button>
@@ -539,6 +503,200 @@ const VerificationQueue = () => {
           </Grid>
         )}
       </Paper>
+
+      <Dialog
+        open={detailModalOpen}
+        onClose={() => setDetailModalOpen(false)}
+        maxWidth="md"
+        fullWidth
+      >
+        {selectedNft && (
+          <>
+            <DialogTitle sx={{ pb: 1 }}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Typography variant="h6">{selectedNft.name || `Token #${selectedNft.tokenId}`}</Typography>
+                <Chip 
+                  icon={<PendingIcon />} 
+                  label="Đang chờ xác thực" 
+                  color="warning" 
+                  size="small" 
+                />
+              </Box>
+            </DialogTitle>
+            <DialogContent dividers>
+              <Grid container spacing={3}>
+                <Grid item xs={12} md={6}>
+                  <Box sx={{ 
+                    width: '100%', 
+                    pt: '100%', 
+                    position: 'relative',
+                    bgcolor: '#f5f5f5',
+                    borderRadius: 1,
+                    overflow: 'hidden',
+                    border: '1px solid #eaeaea'
+                  }}>
+                    {selectedNft.image ? (
+                      <Box 
+                        component="img"
+                        src={selectedNft.image}
+                        alt={selectedNft.name}
+                        sx={{
+                          position: 'absolute',
+                          top: 0,
+                          left: 0,
+                          width: '100%',
+                          height: '100%',
+                          objectFit: 'contain'
+                        }}
+                        onError={(e) => {
+                          e.target.onerror = null;
+                          e.target.style.display = 'none';
+                          e.target.parentElement.innerHTML = `
+                            <div style="display:flex;align-items:center;justify-content:center;height:100%;width:100%;flex-direction:column;">
+                              <svg style="width:64px;height:64px;color:#bdbdbd;" viewBox="0 0 24 24">
+                                <path fill="currentColor" d="M19,19H5V5H19M19,3H5A2,2 0 0,0 3,5V19A2,2 0 0,0 5,21H19A2,2 0 0,0 21,19V5A2,2 0 0,0 19,3M13.96,12.29L11.21,15.83L9.25,13.47L6.5,17H17.5L13.96,12.29Z" />
+                              </svg>
+                              <p style="margin-top:8px;color:#757575;">Không thể tải hình ảnh</p>
+                            </div>
+                          `;
+                        }}
+                      />
+                    ) : (
+                      <Box sx={{
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        width: '100%',
+                        height: '100%',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                      }}>
+                        <ImageIcon sx={{ fontSize: 80, color: '#cccccc' }} />
+                      </Box>
+                    )}
+                  </Box>
+                </Grid>
+                
+                <Grid item xs={12} md={6}>
+                  <List disablePadding>
+                    <ListItem divider>
+                      <ListItemText 
+                        primary="ID Token" 
+                        secondary={selectedNft.tokenId}
+                        primaryTypographyProps={{ variant: 'subtitle2', color: 'text.secondary' }}
+                        secondaryTypographyProps={{ variant: 'body2', fontWeight: 500 }}
+                      />
+                    </ListItem>
+                    
+                    <ListItem divider>
+                      <ListItemText 
+                        primary="Bộ sưu tập" 
+                        secondary={selectedNft.collection || 'Không có thông tin'}
+                        primaryTypographyProps={{ variant: 'subtitle2', color: 'text.secondary' }}
+                        secondaryTypographyProps={{ variant: 'body2', fontWeight: 500 }}
+                      />
+                    </ListItem>
+                    
+                    <ListItem divider>
+                      <ListItemText 
+                        primary="Chủ sở hữu" 
+                        secondary={selectedNft.owner ? formatAddress(selectedNft.owner) : 'Không xác định'}
+                        primaryTypographyProps={{ variant: 'subtitle2', color: 'text.secondary' }}
+                        secondaryTypographyProps={{ variant: 'body2', fontWeight: 500 }}
+                      />
+                    </ListItem>
+                    
+                    <ListItem divider>
+                      <ListItemText 
+                        primary="Người yêu cầu xác thực" 
+                        secondary={selectedNft.requester ? formatAddress(selectedNft.requester) : 'Không xác định'}
+                        primaryTypographyProps={{ variant: 'subtitle2', color: 'text.secondary' }}
+                        secondaryTypographyProps={{ variant: 'body2', fontWeight: 500 }}
+                      />
+                    </ListItem>
+                    
+                    <ListItem divider>
+                      <ListItemText 
+                        primary="Thời gian yêu cầu" 
+                        secondary={selectedNft.requestTime || 'Không xác định'}
+                        primaryTypographyProps={{ variant: 'subtitle2', color: 'text.secondary' }}
+                        secondaryTypographyProps={{ variant: 'body2', fontWeight: 500 }}
+                      />
+                    </ListItem>
+                    
+                    <ListItem divider>
+                      <ListItemText 
+                        primary="Địa chỉ hợp đồng" 
+                        secondary={
+                          <Typography 
+                            variant="body2" 
+                            sx={{ 
+                              fontFamily: 'monospace', 
+                              wordBreak: 'break-all',
+                              fontSize: '0.75rem'
+                            }}
+                          >
+                            {selectedNft.contractAddress || 'Không xác định'}
+                          </Typography>
+                        }
+                        primaryTypographyProps={{ variant: 'subtitle2', color: 'text.secondary' }}
+                      />
+                    </ListItem>
+                  </List>
+                  
+                  {selectedNft.description && (
+                    <Box sx={{ mt: 2 }}>
+                      <Typography variant="subtitle2" color="text.secondary">Mô tả</Typography>
+                      <Typography variant="body2" sx={{ mt: 0.5, whiteSpace: 'pre-line' }}>
+                        {selectedNft.description}
+                      </Typography>
+                    </Box>
+                  )}
+                  
+                  {selectedNft.attributes && selectedNft.attributes.length > 0 && (
+                    <Box sx={{ mt: 3 }}>
+                      <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                        Thuộc tính
+                      </Typography>
+                      <Grid container spacing={1} sx={{ mt: 0.5 }}>
+                        {selectedNft.attributes.map((attr, index) => (
+                          <Grid item xs={6} key={index}>
+                            <Paper
+                              elevation={0}
+                              sx={{
+                                p: 1,
+                                bgcolor: '#f5f5f5',
+                                borderRadius: 1,
+                                border: '1px solid #e0e0e0',
+                              }}
+                            >
+                              <Typography variant="caption" color="text.secondary">
+                                {attr.trait_type || 'Thuộc tính'}
+                              </Typography>
+                              <Typography variant="body2" sx={{ fontWeight: 600 }} noWrap>
+                                {attr.value || '-'}
+                              </Typography>
+                            </Paper>
+                          </Grid>
+                        ))}
+                      </Grid>
+                    </Box>
+                  )}
+                </Grid>
+              </Grid>
+            </DialogContent>
+            <DialogActions>
+              <Button 
+                variant="outlined" 
+                onClick={() => setDetailModalOpen(false)}
+              >
+                Đóng
+              </Button>
+            </DialogActions>
+          </>
+        )}
+      </Dialog>
 
       <Snackbar
         open={alert.open}
@@ -555,7 +713,7 @@ const VerificationQueue = () => {
           {alert.message}
         </Alert>
       </Snackbar>
-    </Container>
+    </Box>
   );
 };
 

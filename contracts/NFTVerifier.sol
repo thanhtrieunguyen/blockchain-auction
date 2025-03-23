@@ -120,6 +120,24 @@ contract NFTVerifier {
     function getVerificationStatus(uint256 _tokenId) external view returns (VerificationStatus) {
         return verificationRequests[_tokenId].status;
     }
+
+    // Lấy thông tin yêu cầu xác minh
+    function getVerificationRequest(uint256 _tokenId) external view returns (
+        address requester,
+        uint256 tokenId,
+        VerificationStatus status,
+        string memory reason,
+        uint256 requestTime
+    ) {
+        VerificationRequest memory request = verificationRequests[_tokenId];
+        return (
+            request.requester,
+            request.tokenId,
+            request.status,
+            request.reason,
+            request.requestTime
+        );
+    }
     
     // Lấy danh sách tokenId đang chờ xác minh
     function getPendingTokens() external view returns (uint256[] memory) {
