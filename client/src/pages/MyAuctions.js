@@ -75,21 +75,48 @@ const MyAuctions = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null); // Add error state
   const [countdowns, setCountdowns] = useState({}); // NEW: countdown state
+  const [processingAuctions, setProcessingAuctions] = useState({});
+  // Initialize from localStorage to persist between page reloads
+  const [finalizedAuctions, setFinalizedAuctions] = useState(() => {
+    try {
+      const saved = localStorage.getItem('finalizedAuctions');
+      return saved ? new Set(JSON.parse(saved)) : new Set();
+    } catch (e) {
+      console.error("Error loading finalized auctions from localStorage:", e);
+      return new Set();
+    }
+  });
+  const [cancelledAuctions, setCancelledAuctions] = useState(new Set());
   const { account } = useContext(AccountContext);
   const navigate = useNavigate();
   const { enqueueSnackbar } = useSnackbar();
+
+  // Save finalizedAuctions to localStorage whenever it changes
+  useEffect(() => {
+    try {
+      localStorage.setItem('finalizedAuctions', JSON.stringify([...finalizedAuctions]));
+    } catch (e) {
+      console.error("Error saving finalized auctions to localStorage:", e);
+    }
+  }, [finalizedAuctions]);
 
   const fetchMyAuctions = async () => {
     try {
       console.log("Fetching auctions for account:", account);
       setError(null);
       setLoading(true);
+      // Preserve the finalized auctions state between refreshes
+      const currentFinalizedAuctions = finalizedAuctions;
+      setCancelledAuctions(new Set());
       const web3 = await initWeb3();
       const { nftAuction, nftMinting } = await getContracts(web3);
       
       const auctionCounter = await nftAuction.methods.auctionCounter().call();
       console.log("Total auctions:", auctionCounter);
       const myAuctions = [];
+      
+      // Create a new set for finalized auctions based on blockchain data
+      const newFinalizedAuctions = new Set([...finalizedAuctions]);
       
       for (let i = 1; i <= auctionCounter; i++) {
         try {
@@ -193,6 +220,22 @@ const MyAuctions = () => {
           const hasBids = auction.highestBid && auction.highestBid > 0;
           const endTimeFormatted = new Date(endTimeMs).toLocaleString();
           
+          // Check both auction state and if it's already in our finalized set
+          const isBlockchainFinalized = auction.state === '2' || auction.ended;
+          const isAlreadyFinalized = finalizedAuctions.has(i.toString()) || finalizedAuctions.has(i);
+          
+          console.log(`Auction #${i} state:`, {
+            blockchainState: auction.state,
+            isBlockchainFinalized,
+            isAlreadyFinalized,
+            isInFinalizedSet: finalizedAuctions.has(i.toString())
+          });
+          
+          // If auction is finalized on the blockchain, add to our set
+          if (isBlockchainFinalized) {
+            newFinalizedAuctions.add(i);
+          }
+          
           const auctionData = {
             id: i,
             tokenId: auction.tokenId,
@@ -207,7 +250,9 @@ const MyAuctions = () => {
             hasBids,
             name: metadata.name,
             image: metadata.image,
-            description: metadata.description
+            description: metadata.description,
+            finalized: isBlockchainFinalized || isAlreadyFinalized, // Track finalization status
+            blockchainState: auction.state
           };
           
           console.log("Adding auction to list:", auctionData);
@@ -217,6 +262,9 @@ const MyAuctions = () => {
         }
       }
       
+      // Update finalized auctions state with blockchain data
+      setFinalizedAuctions(newFinalizedAuctions);
+      
       // Sort auctions: active first, then by end time
       myAuctions.sort((a, b) => {
         if (a.hasEnded !== b.hasEnded) return a.hasEnded ? 1 : -1;
@@ -225,6 +273,8 @@ const MyAuctions = () => {
       
       console.log("Final auctions list:", myAuctions);
       setAuctions(myAuctions);
+      // After processing all auctions, update the finalized auctions set
+      setFinalizedAuctions(currentFinalizedAuctions);
     } catch (error) {
       console.error("Error loading auctions:", error);
       setError(error.message || "Failed to load your auctions");
@@ -236,29 +286,83 @@ const MyAuctions = () => {
 
   const handleFinalizeAuction = async (auctionId) => {
     try {
-      setLoading(true);
+      setProcessingAuctions(prev => ({ ...prev, [auctionId]: 'finalizing' }));
       const web3 = await initWeb3();
       const { nftAuction } = await getContracts(web3);
       
+      // First, check if the auction is already finalized to prevent unnecessary transactions
+      const auctionData = await nftAuction.methods.auctions(auctionId).call();
+      console.log(`Checking if auction #${auctionId} is already finalized:`, auctionData);
+      
+      if (auctionData.state === '2' || auctionData.ended) { // If already finalized (state 2) or ended
+        enqueueSnackbar("This auction has already been finalized!", { variant: "info" });
+        
+        // Add to finalized set and persist it
+        const newFinalizedSet = new Set([...finalizedAuctions, auctionId]);
+        setFinalizedAuctions(newFinalizedSet);
+        localStorage.setItem('finalizedAuctions', JSON.stringify([...newFinalizedSet]));
+        
+        // Update the auction in the UI without making a transaction
+        setAuctions(prevAuctions => 
+          prevAuctions.map(auction => 
+            auction.id === auctionId 
+              ? { ...auction, ended: true, hasEnded: true, finalized: true } 
+              : auction
+          )
+        );
+        return;
+      }
+      
+      // If not finalized, proceed with finalization
       await nftAuction.methods.finalizeAuction(auctionId).send({ from: account });
       
-      enqueueSnackbar("Auction finalized successfully!", { variant: "success" });
-      fetchMyAuctions();
+      // After successful finalization, update UI and persistence
+      const newFinalizedSet = new Set([...finalizedAuctions, auctionId]);
+      setFinalizedAuctions(newFinalizedSet);
+      localStorage.setItem('finalizedAuctions', JSON.stringify([...newFinalizedSet]));
+      
+      setAuctions(prevAuctions => 
+        prevAuctions.map(auction => 
+          auction.id === auctionId 
+            ? { ...auction, ended: true, hasEnded: true, finalized: true } 
+            : auction
+        )
+      );
+      
+      // Add to finalized set to prevent further clicks
+      setFinalizedAuctions(prev => new Set([...prev, auctionId]));
+      
+      // Show success message
+      enqueueSnackbar("Auction finalized successfully! NFT transferred and payment received.", { variant: "success" });
     } catch (error) {
       console.error("Error finalizing auction:", error);
       enqueueSnackbar(error.message || "Failed to finalize auction", { variant: "error" });
     } finally {
-      setLoading(false);
+      setProcessingAuctions(prev => {
+        const newState = { ...prev };
+        delete newState[auctionId];
+        return newState;
+      });
     }
   };
 
   const handleCancelAuction = async (auctionId) => {
     try {
-      setLoading(true);
+      setProcessingAuctions(prev => ({ ...prev, [auctionId]: 'cancelling' }));
       const web3 = await initWeb3();
       const { nftAuction } = await getContracts(web3);
       
       await nftAuction.methods.cancelAuction(auctionId).send({ from: account });
+      
+      setAuctions(prevAuctions => 
+        prevAuctions.map(auction => 
+          auction.id === auctionId 
+            ? { ...auction, ended: true, hasEnded: true } 
+            : auction
+        )
+      );
+      
+      setCancelledAuctions(prev => new Set([...prev, auctionId]));
       
       enqueueSnackbar("Auction cancelled successfully!", { variant: "success" });
       fetchMyAuctions();
@@ -266,7 +370,11 @@ const MyAuctions = () => {
       console.error("Error cancelling auction:", error);
       enqueueSnackbar(error.message || "Failed to cancel auction", { variant: "error" });
     } finally {
-      setLoading(false);
+      setProcessingAuctions(prev => {
+        const newState = { ...prev };
+        delete newState[auctionId];
+        return newState;
+      });
     }
   };
 
@@ -314,7 +422,7 @@ const MyAuctions = () => {
               borderRadius: '8px',
             }}
           >
-            Create New Auction
+            Tạo phiên đấu giá mới
           </Button>
           <Button 
             variant="outlined" 
@@ -331,7 +439,7 @@ const MyAuctions = () => {
               }
             }}
           >
-            Refresh
+            Làm mới
           </Button>
         </Box>
       </Box>
@@ -358,21 +466,26 @@ const MyAuctions = () => {
           <CircularProgress />
         </Box>
       ) : auctions.length === 0 ? (
-        <Paper sx={{ p: 4, textAlign: 'center', borderRadius: 2, boxShadow: 2 }}>
-          <Typography variant="h6" gutterBottom>
-            You haven't created any auctions yet
-          </Typography>
-          <Typography color="text.secondary" sx={{ mb: 3 }}>
-            Start selling your NFTs by creating your first auction
+        // Chưa có phiên đấu giá nào
+        <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 8 }}>
+          <MonetizationOnIcon sx={{ fontSize: 80, color: 'text.secondary' }} />
+          <Typography variant="h6" component="div" align="center" sx={{ mt: 2 }}>
+            Bạn chưa tạo phiên đấu giá nào. Hãy bắt đầu bằng cách tạo phiên đấu giá mới.
           </Typography>
           <Button 
-            variant="contained" 
-            color="primary"
+            variant="contained"
             onClick={() => navigate('/create-auction')}
+            sx={{ 
+              mt: 2,
+              textTransform: 'none',
+              fontWeight: 600,
+              borderRadius: '8px',
+            }}
           >
-            Create Auction
+
+            Tạo phiên đấu giá mới
           </Button>
-        </Paper>
+        </Box>
       ) : (
         <Grid container spacing={3}>
           {auctions.map((auction) => (
@@ -529,40 +642,76 @@ const MyAuctions = () => {
                 <Box sx={{ p: 2, pt: 0, bgcolor: 'background.paper' }}>
                   {/* Action buttons */}
                   <Box sx={{ display: 'flex', gap: 1 }}>
-                    {!auction.ended && auction.endTime < Date.now() && (
+                    {/* More explicit condition for showing Finalize button */}
+                    {!auction.ended && 
+                     auction.endTime < Date.now() && 
+                     !finalizedAuctions.has(auction.id) && 
+                     !finalizedAuctions.has(auction.id.toString()) && 
+                     !auction.finalized && 
+                     auction.blockchainState !== '2' && (
                       <Button 
                         variant="contained" 
                         color="primary"
                         size="small"
                         fullWidth
                         onClick={() => handleFinalizeAuction(auction.id)}
+                        disabled={processingAuctions[auction.id] === 'finalizing'}
                         sx={{ 
                           borderRadius: '8px',
                           textTransform: 'none',
                           fontWeight: 600
                         }}
                       >
-                        Finalize
+                        {processingAuctions[auction.id] === 'finalizing' ? (
+                          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                            <CircularProgress size={16} sx={{ mr: 1 }} />
+                            Finalizing...
+                          </Box>
+                        ) : 'Finalize'}
                       </Button>
                     )}
                     
-                    {!auction.ended && !auction.hasBids && (
+                    {!auction.ended && !auction.hasBids && 
+                     !cancelledAuctions.has(auction.id) && (
                       <Button 
                         variant="outlined" 
                         color="error"
                         size="small"
                         fullWidth
                         onClick={() => handleCancelAuction(auction.id)}
+                        disabled={processingAuctions[auction.id] === 'cancelling'}
                         sx={{ 
                           borderRadius: '8px',
                           textTransform: 'none',
                           fontWeight: 600
                         }}
                       >
-                        Cancel
+                        {processingAuctions[auction.id] === 'cancelling' ? (
+                          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                            <CircularProgress size={16} sx={{ mr: 1 }} />
+                            Cancelling...
+                          </Box>
+                        ) : 'Cancel'}
                       </Button>
                     )}
                   </Box>
+                 {(auction.ended || 
+                    finalizedAuctions.has(auction.id) || 
+                    finalizedAuctions.has(auction.id.toString()) || 
+                    auction.finalized || 
+                    auction.blockchainState === '2') && (
+                    <Chip
+                      label="Finalized"
+                      color="success"
+                      size="small"
+                      sx={{ 
+                        borderRadius: '8px',
+                        fontWeight: 600,
+                        width: '100%',
+                        mt: 1
+                      }}
+                    />
+                  )}
                 </Box>
               </Card>
             </Grid>

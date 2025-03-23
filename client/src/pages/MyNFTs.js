@@ -28,13 +28,78 @@ const resolveIPFSUri = (uri) => {
   return uri;
 };
 
+// Moved outside and memoized to prevent recreation on each render
+const ImportNFTDialog = React.memo(({ 
+  open, 
+  onClose, 
+  onImport, 
+  importLoading 
+}) => {
+  // Local state inside the dialog component to prevent parent re-renders
+  const [localImportData, setLocalImportData] = useState({ tokenAddress: '', tokenId: '' });
+
+  // Reset form when dialog opens
+  useEffect(() => {
+    if (open) {
+      setLocalImportData({ tokenAddress: '', tokenId: '' });
+    }
+  }, [open]);
+
+  const handleImport = () => {
+    onImport(localImportData);
+  };
+
+  return (
+    <Dialog open={open} onClose={onClose}>
+      <DialogTitle>Nhập NFT Bên Ngoài</DialogTitle>
+      <DialogContent>
+        <Box sx={{ p: 1 }}>
+          <Typography variant="body2" sx={{ mb: 2 }}>
+            Nhập các NFT bạn sở hữu từ các hợp đồng khác để xác thực chúng cho đấu giá.
+          </Typography>
+          
+          <TextField
+            label="Địa Chỉ Hợp Đồng NFT"
+            fullWidth
+            value={localImportData.tokenAddress}
+            onChange={(e) => setLocalImportData({...localImportData, tokenAddress: e.target.value})}
+            margin="normal"
+            variant="outlined"
+            placeholder="0x..."
+          />
+          
+          <TextField
+            label="ID Token"
+            fullWidth
+            value={localImportData.tokenId}
+            onChange={(e) => setLocalImportData({...localImportData, tokenId: e.target.value})}
+            margin="normal"
+            variant="outlined"
+            placeholder="1"
+          />
+        </Box>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose}>Hủy</Button>
+        <Button 
+          onClick={handleImport} 
+          color="primary" 
+          variant="contained"
+          disabled={importLoading}
+        >
+          {importLoading ? <CircularProgress size={24} /> : "Nhập NFT"}
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+});
+
 const MyNFTs = () => {
   const { account, contracts } = useContext(AccountContext);
   const [nfts, setNfts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
-  const [importData, setImportData] = useState({ tokenAddress: '', tokenId: '' });
   const [importLoading, setImportLoading] = useState(false);
   const navigate = useNavigate();
   const { enqueueSnackbar } = useSnackbar();
@@ -46,7 +111,7 @@ const MyNFTs = () => {
       setError(null);
       
       if (!account) {
-        setError("Please connect your wallet");
+        setError("Vui lòng kết nối ví của bạn");
         setLoading(false);
         return;
       }
@@ -156,15 +221,15 @@ const verifiedNFTs = await Promise.all(
       setNfts([...verifiedNFTs, ...verifiedImportedNFTs]);
     } catch (error) {
       console.error("Error fetching NFTs:", error);
-      setError("Failed to load your NFTs. Please try again.");
-      enqueueSnackbar("Failed to load your NFTs", { variant: "error" });
+      setError("Không thể tải NFT của bạn. Vui lòng thử lại.");
+      enqueueSnackbar("Không thể tải NFT của bạn", { variant: "error" });
     } finally {
       setLoading(false);
     }
   };
 
   // Import external NFT
-  const handleImportNFT = async () => {
+  const handleImportNFT = async (importData) => {
     try {
       setImportLoading(true);
       setError(null);
@@ -172,7 +237,28 @@ const verifiedNFTs = await Promise.all(
       const { tokenAddress, tokenId } = importData;
       
       if (!tokenAddress || !tokenId) {
-        enqueueSnackbar("Please enter both contract address and token ID", { variant: "error" });
+        enqueueSnackbar("Vui lòng nhập cả địa chỉ hợp đồng và ID token", { variant: "error" });
+        return;
+      }
+      
+      // Check if this NFT is already imported before proceeding
+      const savedNFTsJson = localStorage.getItem('importedNFTs');
+      const savedNFTs = savedNFTsJson ? JSON.parse(savedNFTsJson) : [];
+      
+      // Convert tokenId to string to ensure consistent comparison
+      const tokenIdStr = tokenId.toString();
+      const normalizedTokenAddress = tokenAddress.toLowerCase();
+      
+      // Check for existing import with same contract address and token ID
+      const existingNFT = savedNFTs.find(
+        nft => nft.contractAddress.toLowerCase() === normalizedTokenAddress && 
+              nft.tokenId.toString() === tokenIdStr
+      );
+      
+      if (existingNFT) {
+        enqueueSnackbar("NFT này đã được nhập trước đó", { variant: "warning" });
+        setImportLoading(false);
+        setImportDialogOpen(false);
         return;
       }
       
@@ -202,7 +288,7 @@ const verifiedNFTs = await Promise.all(
         const owner = await erc721Contract.methods.ownerOf(tokenId).call();
         
         if (owner.toLowerCase() !== account.toLowerCase()) {
-          enqueueSnackbar("You don't own this NFT", { variant: "error" });
+          enqueueSnackbar("Bạn không sở hữu NFT này", { variant: "error" });
           return;
         }
         
@@ -235,7 +321,7 @@ const verifiedNFTs = await Promise.all(
         
         // Store imported NFT
         const importedNFT = {
-          tokenId,
+          tokenId: tokenIdStr, // Store as string for consistency
           contractAddress: tokenAddress,
           owner: account,
           name: metadata.name,
@@ -245,39 +331,55 @@ const verifiedNFTs = await Promise.all(
           importedAt: new Date().toISOString()
         };
         
-        // Save to localStorage
-        const savedNFTsJson = localStorage.getItem('importedNFTs');
-        const savedNFTs = savedNFTsJson ? JSON.parse(savedNFTsJson) : [];
-        
-        // Check if this NFT is already imported
-        const existingIndex = savedNFTs.findIndex(
-          nft => nft.contractAddress.toLowerCase() === tokenAddress.toLowerCase() && 
-                nft.tokenId === tokenId
-        );
-        
-        if (existingIndex >= 0) {
-          // Update existing entry
-          savedNFTs[existingIndex] = importedNFT;
-        } else {
-          // Add new entry
-          savedNFTs.push(importedNFT);
-        }
-        
+        // Save to localStorage - we already loaded savedNFTs above
+        savedNFTs.push(importedNFT);
         localStorage.setItem('importedNFTs', JSON.stringify(savedNFTs));
         
-        enqueueSnackbar("NFT imported successfully", { variant: "success" });
+        enqueueSnackbar("Nhập NFT thành công", { variant: "success" });
         setImportDialogOpen(false);
-        setImportData({ tokenAddress: '', tokenId: '' });
         
         // Refresh NFT list
         fetchNFTs();
         
       } catch (error) {
         console.error("Error importing NFT:", error);
-        enqueueSnackbar(error.message || "Failed to import NFT", { variant: "error" });
+        enqueueSnackbar(error.message || "Không thể nhập NFT", { variant: "error" });
       }
     } finally {
       setImportLoading(false);
+    }
+  };
+
+  // Add a function to handle NFT deletion
+  const handleDeleteNFT = (nft) => {
+    try {
+      // Get current imported NFTs from localStorage
+      const savedNFTsJson = localStorage.getItem('importedNFTs');
+      let savedNFTs = savedNFTsJson ? JSON.parse(savedNFTsJson) : [];
+      
+      // Filter out the NFT to delete - match on both contract address and token ID
+      savedNFTs = savedNFTs.filter(
+        savedNFT => !(
+          savedNFT.contractAddress.toLowerCase() === nft.contractAddress.toLowerCase() && 
+          savedNFT.tokenId.toString() === nft.tokenId.toString()
+        )
+      );
+      
+      // Save the updated list back to localStorage
+      localStorage.setItem('importedNFTs', JSON.stringify(savedNFTs));
+      
+      // Remove the NFT from the current state
+      setNfts(currentNfts => currentNfts.filter(
+        currentNft => !(
+          currentNft.contractAddress.toLowerCase() === nft.contractAddress.toLowerCase() && 
+          currentNft.tokenId.toString() === nft.tokenId.toString()
+        )
+      ));
+      
+      enqueueSnackbar("NFT đã được xóa", { variant: "success" });
+    } catch (error) {
+      console.error("Error deleting NFT:", error);
+      enqueueSnackbar("Không thể xóa NFT", { variant: "error" });
     }
   };
 
@@ -298,7 +400,7 @@ const verifiedNFTs = await Promise.all(
       });
     } else {
       // NFT is not verified
-      enqueueSnackbar("This NFT must be verified before creating an auction", { variant: "warning" });
+      enqueueSnackbar("NFT này phải được xác thực trước khi tạo đấu giá", { variant: "warning" });
     }
   };
 
@@ -310,51 +412,6 @@ const verifiedNFTs = await Promise.all(
     
     fetchNFTs();
   }, [account, navigate]);
-
-  // Import Dialog
-  const ImportDialog = () => (
-    <Dialog open={importDialogOpen} onClose={() => setImportDialogOpen(false)}>
-      <DialogTitle>Import External NFT</DialogTitle>
-      <DialogContent>
-        <Box sx={{ p: 1 }}>
-          <Typography variant="body2" sx={{ mb: 2 }}>
-            Import NFTs you own from other contracts to verify them for auctions.
-          </Typography>
-          
-          <TextField
-            label="NFT Contract Address"
-            fullWidth
-            value={importData.tokenAddress}
-            onChange={(e) => setImportData({...importData, tokenAddress: e.target.value})}
-            margin="normal"
-            variant="outlined"
-            placeholder="0x..."
-          />
-          
-          <TextField
-            label="Token ID"
-            fullWidth
-            value={importData.tokenId}
-            onChange={(e) => setImportData({...importData, tokenId: e.target.value})}
-            margin="normal"
-            variant="outlined"
-            placeholder="1"
-          />
-        </Box>
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={() => setImportDialogOpen(false)}>Cancel</Button>
-        <Button 
-          onClick={handleImportNFT} 
-          color="primary" 
-          variant="contained"
-          disabled={importLoading}
-        >
-          {importLoading ? <CircularProgress size={24} /> : "Import NFT"}
-        </Button>
-      </DialogActions>
-    </Dialog>
-  );
 
   // Render verification status chip
   const renderVerificationStatusChip = (status) => {
@@ -375,14 +432,14 @@ const verifiedNFTs = await Promise.all(
       <Paper sx={{ p: 3, mb: 3 }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
           <Typography variant="h5" component="h1" gutterBottom>
-            My NFTs
+            NFT Của Tôi
           </Typography>
           <Button 
             variant="contained" 
             color="primary"
             onClick={() => setImportDialogOpen(true)}
           >
-            Import NFT
+            Nhập NFT
           </Button>
         </Box>
         
@@ -399,16 +456,8 @@ const verifiedNFTs = await Promise.all(
         ) : nfts.length === 0 ? (
           <Box sx={{ p: 4, textAlign: 'center' }}>
             <Typography variant="h6" color="textSecondary">
-              You don't have any NFTs yet
+              Bạn chưa có NFT nào
             </Typography>
-            <Button 
-              variant="outlined" 
-              color="primary" 
-              sx={{ mt: 2 }}
-              onClick={() => navigate('/marketplace')}
-            >
-              Browse Marketplace
-            </Button>
           </Box>
         ) : (
           <Grid container spacing={3}>
@@ -431,11 +480,11 @@ const verifiedNFTs = await Promise.all(
                     </Box>
                     
                     <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                      Token ID: {nft.tokenId}
+                      ID Token: {nft.tokenId}
                     </Typography>
                     
                     <Typography variant="body2" noWrap sx={{ mb: 1 }}>
-                      {nft.description || 'No description available'}
+                      {nft.description || 'Không có mô tả'}
                     </Typography>
                     
                     <Box sx={{ mt: 2 }}>
@@ -454,8 +503,20 @@ const verifiedNFTs = await Promise.all(
                         onClick={() => handleCreateAuction(nft)}
                         disabled={nft.verificationStatus !== 2}
                       >
-                        Create Auction
+                        Tạo Đấu Giá
                       </Button>
+                      
+                      {/* Add delete button only for imported NFTs - check if importedAt exists */}
+                      {nft.importedAt && (
+                        <Button 
+                          variant="outlined" 
+                          color="error"
+                          size="small"
+                          onClick={() => handleDeleteNFT(nft)}
+                        >
+                          Xóa NFT
+                        </Button>
+                      )}
                     </Box>
                   </CardContent>
                 </Card>
@@ -465,7 +526,13 @@ const verifiedNFTs = await Promise.all(
         )}
       </Paper>
       
-      <ImportDialog />
+      {/* Use the memoized dialog component */}
+      <ImportNFTDialog
+        open={importDialogOpen}
+        onClose={() => setImportDialogOpen(false)}
+        onImport={handleImportNFT}
+        importLoading={importLoading}
+      />
     </Container>
   );
 };

@@ -13,9 +13,15 @@ import {
   Divider,
   Alert,
   Snackbar,
-  CircularProgress
+  CircularProgress,
+  Container,
+  Card,
+  CardContent,
+  Grid
 } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
+import PersonAddIcon from '@mui/icons-material/PersonAdd';
+import SecurityIcon from '@mui/icons-material/Security';
 import { AccountContext } from '../../context/AccountContext';
 
 const VerifierManagement = () => {
@@ -74,47 +80,127 @@ const VerifierManagement = () => {
   };
   
 
-  const loadVerifiers = async () => {
-    try {
-      if (!contracts.nftVerifier || !contracts.nftVerifier.methods) {
-        console.error("NFT Verifier contract not available");
-        return;
+const loadVerifiers = async () => {
+  try {
+    console.log("Loading verifiers...");
+    if (!contracts.nftVerifier || !contracts.nftVerifier.methods) {
+      console.error("NFT Verifier contract not available");
+      return;
+    }
+    
+    // Get the owner address
+    const ownerAddress = await contracts.nftVerifier.methods.owner().call();
+    let verifiersArray = [];
+    
+    // Check if owner is a verifier (they should be)
+    const isOwnerVerifier = await contracts.nftVerifier.methods.verifiers(ownerAddress).call();
+    if (isOwnerVerifier) {
+      verifiersArray.push(ownerAddress);
+    }
+    
+    // Check directly for newly added verifier address
+    if (newVerifier && newVerifier !== ownerAddress) {
+      try {
+        const isNewVerifier = await contracts.nftVerifier.methods.verifiers(newVerifier).call();
+        if (isNewVerifier && !verifiersArray.includes(newVerifier)) {
+          verifiersArray.push(newVerifier);
+        }
+      } catch (error) {
+        console.error("Error checking newVerifier:", error);
       }
-      
-      // Try to get all verifiers if function exists
-      if (contracts.nftVerifier.methods.getAllVerifiers) {
-        try {
-          const result = await contracts.nftVerifier.methods.getAllVerifiers().call();
-          console.log("Verifiers loaded:", result);
-          setVerifiers(result || []);
-        } catch (error) {
-          console.error("Error calling getAllVerifiers:", error);
-          // Fallback to manual checking if function fails
-          const accounts = await window.web3.eth.getAccounts();
-          const verifiersArray = [];
-          
-          for (let i = 0; i < accounts.length; i++) {
-            const isVerifier = await contracts.nftVerifier.methods.verifiers(accounts[i]).call();
-            if (isVerifier) {
-              verifiersArray.push(accounts[i]);
+    }
+    
+    // Approach 1: Check all known addresses
+    // These will be the most commonly used Ethereum addresses stored in localStorage
+    try {
+      // If we have a accounts context or related accounts
+      if (window.ethereum) {
+        const accounts = await window.ethereum.request({ method: 'eth_accounts' });
+        
+        // Check each account if it's a verifier
+        for (const addr of accounts) {
+          if (addr.toLowerCase() !== ownerAddress.toLowerCase()) {
+            const isVerifier = await contracts.nftVerifier.methods.verifiers(addr).call();
+            if (isVerifier && !verifiersArray.some(v => v.toLowerCase() === addr.toLowerCase())) {
+              verifiersArray.push(addr);
+              console.log(`Added connected account as verifier: ${addr}`);
             }
           }
-          
-          setVerifiers(verifiersArray);
         }
-      } 
+      }
     } catch (error) {
-      console.error('Error loading verifiers:', error);
-      setAlert({
-        open: true,
-        message: 'Không thể tải danh sách người xác thực: ' + error.message,
-        severity: 'error'
-      });
+      console.error("Error checking connected accounts:", error);
     }
-  };
+    
+    // Approach 2: Use the contract web3 context instead of window.web3
+    // Extract web3 instance from the contract if available
+    if (contracts.nftVerifier.web3) {
+      console.log("Using contract's web3 instance");
+      try {
+        // Try to manually check known addresses
+        const testAddresses = localStorage.getItem('verifierAddresses');
+        if (testAddresses) {
+          const addressList = JSON.parse(testAddresses);
+          for (const addr of addressList) {
+            try {
+              const isVerifier = await contracts.nftVerifier.methods.verifiers(addr).call();
+              if (isVerifier && !verifiersArray.some(v => v.toLowerCase() === addr.toLowerCase())) {
+                verifiersArray.push(addr);
+              }
+            } catch (err) {
+              console.error(`Error checking stored address ${addr}:`, err);
+            }
+          }
+        }
+      } catch (error) {
+        console.error("Error checking stored addresses:", error);
+      }
+    }
+    
+    // Add the current account to verifiers list if it's a verifier
+    if (account && !verifiersArray.some(addr => addr.toLowerCase() === account.toLowerCase())) {
+      try {
+        const isAccountVerifier = await contracts.nftVerifier.methods.verifiers(account).call();
+        if (isAccountVerifier) {
+          verifiersArray.push(account);
+          console.log(`Added current account as verifier: ${account}`);
+        }
+      } catch (error) {
+        console.error(`Error checking if ${account} is a verifier:`, error);
+      }
+    }
+    
+    // Store any new verifiers in localStorage for future reference
+    try {
+      localStorage.setItem('verifierAddresses', JSON.stringify(verifiersArray));
+    } catch (e) {
+      console.error("Error storing verifiers in localStorage:", e);
+    }
+    
+    // Remove duplicates and normalize addresses
+    verifiersArray = [...new Set(verifiersArray.map(addr => addr.toLowerCase()))];
+    
+    console.log("Final list of verifiers:", verifiersArray);
+    setVerifiers(verifiersArray);
+    
+  } catch (error) {
+    console.error('Error loading verifiers:', error);
+    setAlert({
+      open: true,
+      message: 'Không thể tải danh sách người xác thực: ' + error.message,
+      severity: 'error'
+    });
+  }
+};
 
   const handleAddVerifier = async () => {
-    if (!newVerifier || !window.web3.utils.isAddress(newVerifier)) {
+    // Function to validate an Ethereum address
+    const isValidEthereumAddress = (address) => {
+      // Use regex pattern checking
+      return /^0x[0-9a-fA-F]{40}$/.test(address);
+    };
+
+    if (!newVerifier || !isValidEthereumAddress(newVerifier)) {
       setAlert({
         open: true,
         message: 'Địa chỉ không hợp lệ',
@@ -128,6 +214,19 @@ const VerifierManagement = () => {
         .addVerifier(newVerifier)
         .send({ from: account });
       
+      // Store the new verifier address in localStorage
+      try {
+        const storedAddresses = localStorage.getItem('verifierAddresses');
+        let addresses = storedAddresses ? JSON.parse(storedAddresses) : [];
+        if (!addresses.includes(newVerifier)) {
+          addresses.push(newVerifier);
+          localStorage.setItem('verifierAddresses', JSON.stringify(addresses));
+        }
+      } catch (e) {
+        console.error("Error storing in localStorage:", e);
+      }
+      
+      // Update state and UI
       setNewVerifier('');
       loadVerifiers();
       
@@ -175,114 +274,206 @@ const VerifierManagement = () => {
 
   if (contextLoading || loading) {
     return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
-        <CircularProgress />
-        <Typography sx={{ ml: 2 }}>Đang tải thông tin...</Typography>
-      </Box>
-    );
-  }
-
-  if (loading) {
-    return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
-        <CircularProgress />
-        <Typography sx={{ ml: 2 }}>Đang tải thông tin người xác thực...</Typography>
-      </Box>
+      <Container maxWidth="lg" sx={{ py: 4 }}>
+        <Box sx={{ 
+          display: 'flex', 
+          justifyContent: 'center', 
+          alignItems: 'center', 
+          flexDirection: 'column', 
+          p: 5, 
+          minHeight: '50vh',
+          backgroundColor: 'rgba(255, 255, 255, 0.8)',
+          borderRadius: 2
+        }}>
+          <CircularProgress size={60} thickness={4} sx={{ mb: 3 }} />
+          <Typography variant="h6" color="primary">
+            Đang tải thông tin người xác thực...
+          </Typography>
+        </Box>
+      </Container>
     );
   }
 
   if (!isOwner && !isAdmin) {
     return (
-      <Box sx={{ maxWidth: 600, mx: 'auto', p: 3 }}>
-        <Alert severity="warning">
-          Bạn không có quyền quản lý người xác thực. Chỉ chủ sở hữu mới có quyền này.
-        </Alert>
-        <Typography sx={{ mt: 2 }}>
-          Địa chỉ tài khoản hiện tại: {account}
-        </Typography>
-      </Box>
+      <Container maxWidth="lg" sx={{ py: 4 }}>
+        <Paper elevation={3} sx={{ 
+          p: 4, 
+          borderRadius: 2,
+          backgroundColor: 'rgba(255, 255, 255, 0.9)',
+          boxShadow: '0 4px 20px rgba(0,0,0,0.08)'
+        }}>
+          <Alert 
+            severity="warning" 
+            variant="filled"
+            sx={{ 
+              mb: 2,
+              '& .MuiAlert-icon': { fontSize: '1.5rem' }
+            }}
+          >
+            <Typography variant="subtitle1" fontWeight="medium">
+              Bạn không có quyền quản lý người xác thực. Chỉ chủ sở hữu mới có quyền này.
+            </Typography>
+          </Alert>
+        </Paper>
+      </Container>
     );
   }
 
-  // Rest of the component remains unchanged
   return (
-    <Box sx={{ maxWidth: 800, mx: 'auto', p: 3 }}>
-      <Paper elevation={3} sx={{ p: 3, mb: 3 }}>
-        <Typography variant="h5" gutterBottom>
-          Quản lý người xác thực NFT
-        </Typography>
-        <Divider sx={{ mb: 2 }} />
-        
-        <Box sx={{ mb: 3 }}>
-          <TextField
-            fullWidth
-            label="Địa chỉ người xác thực"
-            placeholder="0x..."
-            value={newVerifier}
-            onChange={(e) => setNewVerifier(e.target.value)}
-            sx={{ mb: 2 }}
-          />
-          <Button
-            variant="contained"
-            color="primary"
-            onClick={handleAddVerifier}
-          >
-            Thêm người xác thực
-          </Button>
-        </Box>
-      </Paper>
+    <Container maxWidth="lg" sx={{ py: 4 }}>
+      <Box sx={{ maxWidth: 800, mx: 'auto' }}>
+        <Paper elevation={3} sx={{ 
+          p: 4, 
+          mb: 4, 
+          borderRadius: 2,
+          backgroundColor: 'rgba(255, 255, 255, 0.9)',
+          boxShadow: '0 4px 20px rgba(0,0,0,0.08)'
+        }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+            <SecurityIcon sx={{ fontSize: 28, mr: 1, color: 'primary.main' }} />
+            <Typography variant="h5" component="h1" fontWeight="500" color="primary.main">
+              Quản lý người xác thực
+            </Typography>
+          </Box>
+          
+          <Divider sx={{ mb: 3 }} />
+          
+          <Typography variant="body1" paragraph color="text.secondary">
+            Thêm địa chỉ ví của người xác thực mới vào hệ thống.
+          </Typography>
+          
+          <Box sx={{ 
+            display: 'flex', 
+            flexDirection: { xs: 'column', sm: 'row' },
+            gap: 2,
+            alignItems: { xs: 'stretch', sm: 'center' },
+            mb: 2
+          }}>
+            <TextField
+              label="Địa chỉ người xác thực"
+              variant="outlined"
+              fullWidth
+              value={newVerifier}
+              onChange={(e) => setNewVerifier(e.target.value)}
+              placeholder="0x..."
+              sx={{
+                '& .MuiOutlinedInput-root': {
+                  backgroundColor: '#fff',
+                  borderRadius: 1.5
+                }
+              }}
+            />
+            <Button
+              variant="contained"
+              color="primary"
+              onClick={handleAddVerifier}
+              startIcon={<PersonAddIcon />}
+              sx={{
+                px: 3,
+                py: 1.5,
+                borderRadius: 1.5,
+                fontWeight: 'medium',
+                textTransform: 'none',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                whiteSpace: 'nowrap',
+                minWidth: { xs: '100%', sm: 'auto' }
+              }}
+            >
+              Thêm người xác thực
+            </Button>
+          </Box>
+        </Paper>
 
-      <Paper elevation={3} sx={{ p: 3 }}>
-        <Typography variant="h6" gutterBottom>
-          Danh sách người xác thực
-        </Typography>
-        <Divider sx={{ mb: 2 }} />
-        
-        {verifiers.length === 0 ? (
-          <Typography>Không có người xác thực nào</Typography>
-        ) : (
-          <List>
-            {verifiers.map((address) => (
-              <ListItem key={address} divider>
-                <ListItemText
-                  primary={address}
-                  secondary={
-                    address.toLowerCase() === account.toLowerCase()
-                      ? '(Bạn)'
-                      : null
-                  }
-                />
-                {address.toLowerCase() !== account.toLowerCase() && (
-                  <ListItemSecondaryAction>
-                    <IconButton
-                      edge="end"
-                      aria-label="delete"
-                      onClick={() => handleRemoveVerifier(address)}
-                    >
-                      <DeleteIcon />
-                    </IconButton>
-                  </ListItemSecondaryAction>
-                )}
-              </ListItem>
-            ))}
-          </List>
-        )}
-      </Paper>
+        <Paper elevation={3} sx={{ 
+          p: 4, 
+          borderRadius: 2,
+          backgroundColor: 'rgba(255, 255, 255, 0.9)',
+          boxShadow: '0 4px 20px rgba(0,0,0,0.08)'
+        }}>
+          <Typography variant="h6" gutterBottom color="primary.main" sx={{ fontWeight: 500 }}>
+            Danh sách người xác thực
+          </Typography>
+          <Divider sx={{ mb: 3 }} />
+          
+          {verifiers.length === 0 ? (
+            <Alert severity="info" sx={{ borderRadius: 1.5 }}>
+              <Typography>Không có người xác thực nào</Typography>
+            </Alert>
+          ) : (
+            <List sx={{ 
+              backgroundColor: '#f9f9f9', 
+              borderRadius: 2,
+              overflow: 'hidden'
+            }}>
+              {verifiers.map((address) => (
+                <ListItem 
+                  key={address} 
+                  divider 
+                  sx={{ 
+                    py: 1.5,
+                    '&:hover': { backgroundColor: 'rgba(0, 0, 0, 0.04)' }
+                  }}
+                >
+                  <ListItemText
+                    primary={
+                      <Typography 
+                        variant="body1" 
+                        sx={{ 
+                          fontFamily: 'monospace', 
+                          fontWeight: address.toLowerCase() === account.toLowerCase() ? 'bold' : 'normal',
+                          color: address.toLowerCase() === account.toLowerCase() ? 'primary.main' : 'text.primary'
+                        }}
+                      >
+                        {address}
+                      </Typography>
+                    }
+                    secondary={
+                      address.toLowerCase() === account.toLowerCase()
+                        ? <Typography variant="body2" color="primary">(Bạn)</Typography>
+                        : null
+                    }
+                  />
+                  {address.toLowerCase() !== account.toLowerCase() && (
+                    <ListItemSecondaryAction>
+                      <IconButton
+                        edge="end"
+                        aria-label="delete"
+                        onClick={() => handleRemoveVerifier(address)}
+                        color="error"
+                        sx={{ 
+                          '&:hover': { 
+                            backgroundColor: 'rgba(211, 47, 47, 0.1)' 
+                          }
+                        }}
+                      >
+                        <DeleteIcon />
+                      </IconButton>
+                    </ListItemSecondaryAction>
+                  )}
+                </ListItem>
+              ))}
+            </List>
+          )}
+        </Paper>
+      </Box>
 
       <Snackbar
         open={alert.open}
         autoHideDuration={6000}
         onClose={handleCloseAlert}
+        anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
       >
         <Alert
           onClose={handleCloseAlert}
           severity={alert.severity}
-          sx={{ width: '100%' }}
+          variant="filled"
+          sx={{ width: '100%', boxShadow: '0 4px 12px rgba(0,0,0,0.15)' }}
         >
           {alert.message}
         </Alert>
       </Snackbar>
-    </Box>
+    </Container>
   );
 };
 
